@@ -172,13 +172,6 @@ LOGGING = {
         },
         "console": {"level": "DEBUG", "class": "logging.StreamHandler", "formatter": "verbose"},
         "vendor.apns": {"level": "DEBUG", "class": "logging.StreamHandler", "formatter": "verbose"},
-        "log_file": {
-            "level": "DEBUG",
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": LOG_FILE,
-            "maxBytes": 16777216,  # 16megabytes
-            "formatter": "verbose",
-        },
         "mail_admins": {
             "level": "CRITICAL",
             "class": "django.utils.log.AdminEmailHandler",
@@ -188,7 +181,7 @@ LOGGING = {
     },
     "loggers": {
         "django": {
-            "handlers": ["console", "log_file", "mail_admins"],
+            "handlers": ["console", "mail_admins"],
             "level": "ERROR",
             "propagate": False,
         },
@@ -202,35 +195,35 @@ LOGGING = {
             "propagate": False,
         },
         "elasticsearch": {
-            "handlers": ["console", "log_file"],
+            "handlers": ["console"],
             "level": "ERROR",
             # 'level': 'DEBUG',
             "propagate": False,
         },
         "elasticsearch.trace": {
-            "handlers": ["console", "log_file"],
+            "handlers": ["console"],
             "level": "ERROR",
             # 'level': 'DEBUG',
             "propagate": False,
         },
         "zebra": {
-            "handlers": ["console", "log_file"],
+            "handlers": ["console"],
             # 'level': 'ERROR',
             "level": "DEBUG",
             "propagate": False,
         },
         "newsblur": {
-            "handlers": ["console", "log_file"],
+            "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,
         },
         "readability": {
-            "handlers": ["console", "log_file"],
+            "handlers": ["console"],
             "level": "WARNING",
             "propagate": False,
         },
         "apps": {
-            "handlers": ["log_file"],
+            "handlers": ["console"],
             "level": "DEBUG",
             "propagate": True,
         },
@@ -299,7 +292,7 @@ REMOVE_WWW_FROM_DOMAIN = True
 # ===========
 
 LOG_LEVEL = logging.DEBUG
-LOG_TO_STREAM = False
+LOG_TO_STREAM = True
 
 # ===============
 # = Django Apps =

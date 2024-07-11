@@ -7,10 +7,10 @@ GIGS_OF_MEMORY = psutil.virtual_memory().total / 1024 / 1024 / 1024.0
 NUM_CPUS = psutil.cpu_count()
 
 bind = "0.0.0.0:8000"
-pidfile = "/srv/newsblur/logs/gunicorn.pid"
-logfile = "/srv/newsblur/logs/production.log"
-accesslog = "/srv/newsblur/logs/production.log"
-errorlog = "/srv/newsblur/logs/errors.log"
+pidfile = "/var/run/gunicorn.pid"
+# logfile = "/dev/stdout"
+# accesslog = "/dev/stdout"
+# errorlog = "/dev/stderr"
 loglevel = "info"
 name = "newsblur"
 timeout = 120
@@ -30,7 +30,7 @@ if workers > 16:
 if os.environ.get("DOCKERBUILD", False):
     workers = 2
 
-prom_folder = "/srv/newsblur/.prom_cache"
+prom_folder = "/tmp/.prom_cache"
 os.makedirs(prom_folder, exist_ok=True)
 os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_folder
 for filename in os.listdir(prom_folder):

@@ -4,16 +4,10 @@ services:
   newsblur_web:
     hostname: nb.com
     container_name: newsblur_web
-    image: newsblur/newsblur_${NEWSBLUR_BASE:-python3}:latest
+    image: ghcr.io/duxet/newsblur:latest
     # build: 
     #   context: /srv/newsblur
     #   dockerfile: docker/newsblur_base_image.Dockerfile
-    user: "${CURRENT_UID}:${CURRENT_GID}"
-    environment: 
-      - DOCKERBUILD=True
-      - RUNWITHMAKEBUILD=${RUNWITHMAKEBUILD?Use the `make` command instead of docker CLI}
-    stdin_open: true
-    tty: true
     restart: unless-stopped
     depends_on:
       - db_mongo
@@ -27,10 +21,6 @@ services:
         hard: 10000
     ports:
       - 8000:8000
-    # only use gunicorn if the TEST env variable is not "True"
-    entrypoint: /bin/sh -c newsblur_web/entrypoint.sh
-    volumes: 
-      - ${PWD}:/srv/newsblur
 
   newsblur_node:
     container_name: node

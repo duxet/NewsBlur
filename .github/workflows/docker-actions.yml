@@ -1,4 +1,4 @@
-name: Android CI
+name: Docker CI
 defaults:
   run:
     working-directory: clients/android/NewsBlur
