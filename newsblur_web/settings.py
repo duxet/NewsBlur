@@ -597,7 +597,7 @@ os.environ["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
 
 
 def clear_prometheus_aggregation_stats():
-    prom_folder = "/srv/newsblur/.prom_cache"
+    prom_folder = "/tmp/.prom_cache"
     os.makedirs(prom_folder, exist_ok=True)
     os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_folder
     for filename in os.listdir(prom_folder):

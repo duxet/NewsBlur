@@ -1,0 +1,97 @@
+
+{
+    "listeners":{
+        "*:8000":{
+            "pass":"routes"
+        }
+    },
+
+    "routes": [
+        {
+            "match": {
+                "uri": "/favicon.ico"
+            },
+            "action": {
+                "share": "/srv/newsblur/media/img/favicon_32.png"
+            }
+        },
+        {
+            "match": {
+                "uri": "/robots.txt"
+            },
+            "action": {
+                "share": "/srv/newsblur/media/robots.txt"
+            }
+        },
+        {
+            "match": {
+                "uri": "/static/*"
+            },
+            "action": {
+                "share": "/srv/newsblur/$uri"
+            }
+        },
+        {
+            "match": {
+                "uri": "/imageproxy/*"
+            },
+            "action": {
+                "proxy": "http://imageproxy:8088"
+            }
+        },
+        {
+            "match": {
+                "uri": "/media/*"
+            },
+            "action": {
+                "share": "/srv/newsblur/$uri"
+            }
+        },
+        {
+            "match": {
+                "uri": "/rss_feeds/icon/*"
+            },
+            "action": {
+                "proxy": "http://newsblur_node:8008"
+            }
+        },
+        {
+            "match": {
+                "uri": "/rss_feeds/original_text_fetcher"
+            },
+            "action": {
+                "proxy": "http://newsblur_node:8008"
+            }
+        },
+        {
+            "match": {
+                "uri": "/original_page/*"
+            },
+            "action": {
+                "proxy": "http://newsblur_node:8008"
+            }
+        },
+        {
+            "match": {
+                "uri": "/v3/socket.io/*"
+            },
+            "action": {
+                "proxy": "http://newsblur_node:8008"
+            }
+        },
+        {
+            "action": {
+                "pass": "applications/webapp"
+            }
+        }
+    ],
+
+    "applications":{
+        "webapp":{
+            "type":"python 3",
+            "path":["/srv/newsblur/", "/usr/local/lib/python3.9/site-packages/"],
+            "module": "newsblur_web.wsgi",
+            "callable": "application"
+        }
+    }
+}
