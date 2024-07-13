@@ -435,11 +435,6 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": datetime.timedelta(hours=12),
         "options": {"queue": "cron_queue", "timeout": 720 * 10},
     },
-    "reimport-stripe-history": {
-        "task": "reimport-stripe-history",
-        "schedule": datetime.timedelta(hours=6),
-        "options": {"queue": "cron_queue"},
-    },
     # 'clean-spam': {
     #     'task': 'clean-spam',
     #     'schedule': datetime.timedelta(hours=1),
@@ -448,11 +443,6 @@ CELERY_BEAT_SCHEDULE = {
     "clean-social-spam": {
         "task": "clean-social-spam",
         "schedule": datetime.timedelta(hours=6),
-        "options": {"queue": "cron_queue"},
-    },
-    "premium-expire": {
-        "task": "premium-expire",
-        "schedule": datetime.timedelta(hours=24),
         "options": {"queue": "cron_queue"},
     },
     "activate-next-new-user": {
@@ -709,7 +699,7 @@ if "username" in MONGO_ANALYTICS_DB:
     )
 else:
     MONGOANALYTICSDB = connect(
-        db=MONGO_ANALYTICS_DB["name"], host=f"mongodb://{MONGO_ANALYTICS_DB['host']}/", alias="nbanalytics"
+        db=MONGO_ANALYTICS_DB["name"], host=MONGO_ANALYTICS_DB['host'], alias="nbanalytics"
     )
 
 
