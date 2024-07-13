@@ -1,12 +1,7 @@
 .git
 .vscode
-ansible/
-archive/
-blog/
 clients/
 docker/
 logs/
 node/
-perf/
-terraform/
 venv/

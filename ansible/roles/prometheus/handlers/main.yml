@@ -1,5 +1,0 @@
----
-- name: restart prometheus
-  become: yes
-  command: docker restart prometheus
-  listen: restart prometheus

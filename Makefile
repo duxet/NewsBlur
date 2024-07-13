@@ -83,7 +83,7 @@ keys:
 	openssl req -new -nodes -newkey rsa:2048 -keyout config/certificates/localhost.key -out config/certificates/localhost.csr -subj "/C=US/ST=YourState/L=YourCity/O=Example-Certificates/CN=localhost"
 	openssl x509 -req -sha256 -days 1024 -in config/certificates/localhost.csr -CA config/certificates/RootCA.pem -CAkey config/certificates/RootCA.key -CAcreateserial -out config/certificates/localhost.crt
 	cat config/certificates/localhost.crt config/certificates/localhost.key > config/certificates/localhost.pem
-	sudo /usr/bin/security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./config/certificates/RootCA.crt
+#   sudo /usr/bin/security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./config/certificates/RootCA.crt
 
 # Doesn't work yet
 mkcert:
@@ -124,25 +124,25 @@ pull:
 	docker pull newsblur/newsblur_monitor
 
 local_build_web:
-	# docker buildx build --load . --file=docker/newsblur_base_image.Dockerfile --tag=newsblur/newsblur_python3
-	docker build . --file=docker/newsblur_base_image.Dockerfile --tag=newsblur/newsblur_python3
+	# docker buildx build --load . --file=docker/newsblur_base_image.Dockerfile --tag=ghcr.io/duxet/newsblur
+	docker build . --file=docker/newsblur_base_image.Dockerfile --tag=ghcr.io/duxet/newsblur
 build_web:
-	docker buildx build . --platform linux/amd64,linux/arm64 --file=docker/newsblur_base_image.Dockerfile --tag=newsblur/newsblur_python3
+	docker buildx build . --platform linux/amd64,linux/arm64 --file=docker/newsblur_base_image.Dockerfile --tag=ghcr.io/duxet/newsblur
 build_node: 
-	docker buildx build . --platform linux/amd64,linux/arm64 --file=docker/node/Dockerfile --tag=newsblur/newsblur_node
+	docker buildx build . --platform linux/amd64,linux/arm64 --file=docker/node/Dockerfile --tag=ghcr.io/duxet/newsblur_node
 build_monitor: 
-	docker buildx build . --platform linux/amd64,linux/arm64 --file=docker/monitor/Dockerfile --tag=newsblur/newsblur_monitor
+	docker buildx build . --platform linux/amd64,linux/arm64 --file=docker/monitor/Dockerfile --tag=ghcr.io/duxet/newsblur_monitor
 build_deploy: 
-	docker buildx build . --platform linux/amd64,linux/arm64 --file=docker/newsblur_deploy.Dockerfile --tag=newsblur/newsblur_deploy
+	docker buildx build . --platform linux/amd64,linux/arm64 --file=docker/newsblur_deploy.Dockerfile --tag=ghcr.io/duxet/newsblur_deploy
 build: build_web build_node build_monitor build_deploy
 push_web:
-	docker buildx build . --push --platform linux/amd64,linux/arm64 --file=docker/newsblur_base_image.Dockerfile --tag=newsblur/newsblur_python3
+	docker buildx build . --push --platform linux/amd64,linux/arm64 --file=docker/newsblur_base_image.Dockerfile --tag=ghcr.io/duxet/newsblur
 push_node:
-	docker buildx build . --push --platform linux/amd64,linux/arm64 --file=docker/node/Dockerfile --tag=newsblur/newsblur_node
+	docker buildx build . --push --platform linux/amd64,linux/arm64 --file=docker/node/Dockerfile --tag=ghcr.io/duxet/newsblur_node
 push_monitor:
-	docker buildx build . --push --platform linux/amd64,linux/arm64 --file=docker/monitor/Dockerfile --tag=newsblur/newsblur_monitor
+	docker buildx build . --push --platform linux/amd64,linux/arm64 --file=docker/monitor/Dockerfile --tag=ghcr.io/duxet/newsblur_monitor
 push_deploy:
-	docker buildx build . --push --platform linux/amd64,linux/arm64 --file=docker/newsblur_deploy.Dockerfile --tag=newsblur/newsblur_deploy
+	docker buildx build . --push --platform linux/amd64,linux/arm64 --file=docker/newsblur_deploy.Dockerfile --tag=ghcr.io/duxet/newsblur_deploy
 push_images: push_web push_node push_monitor push_deploy
 push: push_images
 
