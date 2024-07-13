@@ -5,13 +5,13 @@ import os
 # = Server Settings =
 # ===================
 
-ADMINS = (("Samuel Clay", "samuel@newsblur.com"),)
+ADMINS = ((os.getenv("ADMIN_NAME", "Samuel Clay"), os.getenv("ADMIN_EMAIL", "samuel@newsblur.local")),)
 
-SERVER_EMAIL = "server@newsblur.com"
-HELLO_EMAIL = "hello@newsblur.com"
-NEWSBLUR_URL = "https://localhost"
-PUSH_DOMAIN = "localhost"
-SESSION_COOKIE_DOMAIN = "localhost"
+SERVER_EMAIL = os.getenv("SERVER_EMAIL", "server@newsblur.local")
+HELLO_EMAIL = os.getenv("HELLO_EMAIL", "hello@newsblur.local")
+NEWSBLUR_URL = os.getenv("NEWSBLUR_URL", "https://localhost")
+PUSH_DOMAIN = os.getenv("PUSH_DOMAIN", "localhost")
+SESSION_COOKIE_DOMAIN = os.getenv("SESSION_COOKIE_DOMAIN", "localhost")
 
 # ===================
 # = Global Settings =
@@ -38,7 +38,7 @@ MEDIA_URL = "/media/"
 IMAGES_URL = "/imageproxy"
 # Uncomment below to debug iOS/Android widget
 # IMAGES_URL = 'https://haproxy/imageproxy'
-SECRET_KEY = "YOUR SECRET KEY"
+SECRET_KEY = os.getenv("SECRET_KEY", "YOUR SECRET KEY")
 AUTO_PREMIUM_NEW_USERS = True
 AUTO_PREMIUM_ARCHIVE_NEW_USERS = True
 AUTO_PREMIUM_PRO_NEW_USERS = True
@@ -53,6 +53,9 @@ ENFORCE_SIGNUP_CAPTCHA = False
 ENABLE_PUSH = False
 
 PRO_MINUTES_BETWEEN_FETCHES = 15
+
+REDIS_HOST = os.getenv("REDIS_HOST", "db_redis")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6579"))
 
 CACHES = {
     "default": {
@@ -96,20 +99,22 @@ YOUTUBE_API_KEY = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
 DATABASES = {
     "default": {
-        "NAME": "newsblur",
+        "NAME": os.getenv("DB_NAME", "newsblur"),
         "ENGINE": "django_prometheus.db.backends.postgresql",
         #'ENGINE': 'django.db.backends.mysql',
-        "USER": "newsblur",
-        "PASSWORD": "newsblur",
-        "HOST": "db_postgres",
-        "PORT": 5432,
+        "USER": os.getenv("DB_USER", "newsblur"),
+        "PASSWORD": os.getenv("DB_PASSWORD", "newsblur"),
+        "HOST": os.getenv("DB_HOST", "db_postgres"),
+        "PORT": int(os.getenv("DB_PORT", "5432")),
     },
 }
 
-MONGO_DB = {"name": "newsblur", "host": "db_mongo:29019"}
+MONGO_HOST = os.getenv("MONGO_HOST", "db_mongo:29019")
+
+MONGO_DB = {"name": os.getenv("MONGO_NAME", "newsblur"), "host": MONGO_HOST}
 MONGO_ANALYTICS_DB = {
-    "name": "nbanalytics",
-    "host": "db_mongo:29019",
+    "name": os.getenv("MONGO_ANALYTICS_NAME", "newsblur_analytics"),
+    "host": MONGO_HOST,
 }
 
 MONGODB_SLAVE = {"host": "db_mongo"}
@@ -119,10 +124,10 @@ BROKER_URL = "redis://db_redis:6579/0"
 CELERY_RESULT_BACKEND = BROKER_URL
 CELERY_WORKER_CONCURRENCY = 1
 
-REDIS_USER = {"host": "db_redis", "port": 6579}
-REDIS_PUBSUB = {"host": "db_redis", "port": 6579}
-REDIS_STORY = {"host": "db_redis", "port": 6579}
-REDIS_SESSIONS = {"host": "db_redis", "port": 6579}
+REDIS_USER = {"host": REDIS_HOST, "port": REDIS_PORT}
+REDIS_PUBSUB = {"host": REDIS_HOST, "port": REDIS_PORT}
+REDIS_STORY = {"host": REDIS_HOST, "port": REDIS_PORT}
+REDIS_SESSIONS = {"host": REDIS_HOST, "port": REDIS_PORT}
 
 CELERY_REDIS_DB_NUM = 4
 SESSION_REDIS_DB = 5
@@ -162,7 +167,7 @@ MAILGUN_SERVER_NAME = "newsblur.com"
 DO_TOKEN_LOG = "0000000000000000000000000000000000000000000000000000000000000000"
 DO_TOKEN_FABRIC = "0000000000000000000000000000000000000000000000000000000000000000"
 
-SERVER_NAME = "nblocalhost"
+SERVER_NAME = os.getenv("SERVER_NAME", "nblocalhost")
 NEWSBLUR_URL = os.getenv("NEWSBLUR_URL", "https://localhost")
 
 if NEWSBLUR_URL == "https://localhost":
@@ -172,5 +177,5 @@ SESSION_ENGINE = "redis_sessions.session"
 
 # CORS_ORIGIN_REGEX_WHITELIST = ('^(https?://)?(\w+\.)?nb.local\.com$', )
 
-RECAPTCHA_SECRET_KEY = "0000000000000000000000000000000000000000"
-IMAGES_SECRET_KEY = "0000000000000000000000000000000"
+RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY", "0000000000000000000000000000000000000000")
+IMAGES_SECRET_KEY = os.getenv("IMAGES_SECRET_KEY", "0000000000000000000000000000000")
