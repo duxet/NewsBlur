@@ -113,47 +113,11 @@ from vendor.timezones.utilities import localtime_for_timezone
 BANNED_URLS = [
     "brentozar.com",
 ]
-ALLOWED_SUBDOMAINS = [
-    "dev",
-    "www",
-    "hwww",
-    "dwww",
-    # 'beta',  # Comment to redirect beta -> www, uncomment to allow beta -> staging (+ dns changes)
-    "staging",
-    "hstaging",
-    "discovery",
-    "debug",
-    "debug3",
-    "staging2",
-    "staging3",
-    "nb",
-]
-
-
-def get_subdomain(request):
-    host = request.META.get("HTTP_HOST")
-    if host and host.count(".") >= 2:
-        return host.split(".")[0]
-    else:
-        return None
 
 
 @never_cache
 @render_to("reader/dashboard.xhtml")
 def index(request, **kwargs):
-    subdomain = get_subdomain(request)
-    if request.method == "GET" and subdomain and subdomain not in ALLOWED_SUBDOMAINS:
-        username = request.subdomain or subdomain
-        if "." in username:
-            username = username.split(".")[0]
-        user = User.objects.filter(username=username)
-        if not user:
-            user = User.objects.filter(username__iexact=username)
-        if user:
-            user = user[0]
-        if not user:
-            return HttpResponseRedirect("http://%s%s" % (Site.objects.get_current().domain, reverse("index")))
-        return load_social_page(request, user_id=user.pk, username=request.subdomain, **kwargs)
     if request.user.is_anonymous:
         return welcome(request, **kwargs)
     else:
