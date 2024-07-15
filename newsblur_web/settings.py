@@ -47,20 +47,19 @@ from utils.mongo_command_monitor import MongoCommandLogger
 # = Server Settings =
 # ===================
 
-ADMINS = (("Samuel Clay", "samuel@newsblur.com"),)
+ADMINS = ((os.getenv("ADMIN_NAME", "Samuel Clay"), os.getenv("ADMIN_EMAIL", "samuel@newsblur.local")),)
 
-SERVER_NAME = "newsblur"
-SERVER_EMAIL = "server@newsblur.com"
-HELLO_EMAIL = "hello@newsblur.com"
-NEWSBLUR_URL = "https://www.newsblur.com"
-IMAGES_URL = "https://imageproxy.newsblur.com"
-PUSH_DOMAIN = "push.newsblur.com"
-SECRET_KEY = "YOUR_SECRET_KEY"
-IMAGES_SECRET_KEY = "YOUR_SECRET_IMAGE_KEY"
-DNSIMPLE_TOKEN = "YOUR_DNSIMPLE_TOKEN"
-RECAPTCHA_SECRET_KEY = "YOUR_RECAPTCHA_KEY"
-YOUTUBE_API_KEY = "YOUR_YOUTUBE_API_KEY"
-IMAGES_SECRET_KEY = "YOUR_IMAGES_SECRET_KEY"
+SERVER_NAME = os.getenv("SERVER_NAME", "newsblur")
+SERVER_EMAIL = os.getenv("SERVER_EMAIL", "server@newsblur.local")
+HELLO_EMAIL = os.getenv("HELLO_EMAIL", "hello@newsblur.local")
+NEWSBLUR_URL = os.getenv("NEWSBLUR_URL", "http://localhost")
+IMAGES_URL = os.getenv("IMAGES_URL", "/imageproxy")
+PUSH_DOMAIN = os.getenv("PUSH_DOMAIN", "localhost")
+SECRET_KEY = os.getenv("SECRET_KEY", "YOUR SECRET KEY")
+IMAGES_SECRET_KEY = os.getenv("IMAGES_SECRET_KEY", "YOUR_SECRET_IMAGE_KEY")
+DNSIMPLE_TOKEN = os.getenv("DNSIMPLE_TOKEN", "YOUR_DNSIMPLE_TOKEN")
+RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY", "YOUR_RECAPTCHA_KEY")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "YOUR_YOUTUBE_API_KEY")
 DOCKERBUILD = os.getenv("DOCKERBUILD")
 REDIS_USER = None
 FLASK_SENTRY_DSN = None
@@ -69,7 +68,7 @@ FLASK_SENTRY_DSN = None
 # = Global Settings =
 # ===================
 
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "False") == "True"
 TEST_DEBUG = False
 SEND_BROKEN_LINK_EMAILS = False
 DEBUG_QUERIES = False
@@ -90,10 +89,13 @@ CIPHER_USERNAMES = False
 DEBUG_ASSETS = True
 HOMEPAGE_USERNAME = "popular"
 ALLOWED_HOSTS = ["*"]
+AUTO_PREMIUM = True
 AUTO_PREMIUM_NEW_USERS = True
+AUTO_PREMIUM_ARCHIVE_NEW_USERS = True
+AUTO_PREMIUM_PRO_NEW_USERS = True
 AUTO_ENABLE_NEW_USERS = True
 ENFORCE_SIGNUP_CAPTCHA = False
-ENABLE_PUSH = True
+ENABLE_PUSH = os.getenv("ENABLE_PUSH", "False") == "True"
 PAYPAL_TEST = False
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5 MB
@@ -268,10 +270,10 @@ SESSION_ENGINE = "redis_sessions.session"
 TEST_RUNNER = "utils.testrunner.TestRunner"
 SESSION_COOKIE_NAME = "newsblur_sessionid"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 365 * 10  # 10 years
-SESSION_COOKIE_DOMAIN = ".newsblur.com"
+SESSION_COOKIE_DOMAIN = os.getenv("SESSION_COOKIE_DOMAIN", "localhost")
 SESSION_COOKIE_HTTPONLY = False
-SESSION_COOKIE_SECURE = True
-SENTRY_DSN = "https://XXXNEWSBLURXXX@app.getsentry.com/99999999"
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "False") == "True"
+SENTRY_DSN = os.getenv("SENTRY_DSN", "https://XXXNEWSBLURXXX@app.getsentry.com/99999999")
 SESSION_SERIALIZER = "django.contrib.sessions.serializers.PickleSerializer"
 DATA_UPLOAD_MAX_NUMBER_FIELDS = None  # Handle long /reader/complete_river calls
 EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
@@ -670,17 +672,8 @@ MONGO_DB_DEFAULTS = {
 }
 MONGO_DB = dict(MONGO_DB_DEFAULTS, **MONGO_DB)
 MONGO_DB_NAME = MONGO_DB.pop("name")
-# MONGO_URI = 'mongodb://%s' % (MONGO_DB.pop('host'),)
 
-# if MONGO_DB.get('read_preference', pymongo.ReadPreference.PRIMARY) != pymongo.ReadPreference.PRIMARY:
-#     MONGO_PRIMARY_DB = MONGO_DB.copy()
-#     MONGO_PRIMARY_DB.update(read_preference=pymongo.ReadPreference.PRIMARY)
-#     MONGOPRIMARYDB = connect(MONGO_PRIMARY_DB.pop('name'), **MONGO_PRIMARY_DB)
-# else:
-#     MONGOPRIMARYDB = MONGODB
-# MONGODB = connect(MONGO_DB.pop('name'), host=MONGO_URI, **MONGO_DB)
 MONGODB = connect(MONGO_DB_NAME, **MONGO_DB)
-# MONGODB = connect(host="mongodb://localhost:27017/newsblur", connect=False)
 
 MONGO_ANALYTICS_DB_DEFAULTS = {
     "name": "nbanalytics",
@@ -688,19 +681,10 @@ MONGO_ANALYTICS_DB_DEFAULTS = {
     "alias": "nbanalytics",
 }
 MONGO_ANALYTICS_DB = dict(MONGO_ANALYTICS_DB_DEFAULTS, **MONGO_ANALYTICS_DB)
-# MONGO_ANALYTICS_DB_NAME = MONGO_ANALYTICS_DB.pop('name')
-# MONGOANALYTICSDB = connect(MONGO_ANALYTICS_DB_NAME, **MONGO_ANALYTICS_DB)
 
-if "username" in MONGO_ANALYTICS_DB:
-    MONGOANALYTICSDB = connect(
-        db=MONGO_ANALYTICS_DB["name"],
-        host=f"mongodb://{MONGO_ANALYTICS_DB['username']}:{MONGO_ANALYTICS_DB['password']}@{MONGO_ANALYTICS_DB['host']}/?authSource=admin",
-        alias="nbanalytics",
-    )
-else:
-    MONGOANALYTICSDB = connect(
-        db=MONGO_ANALYTICS_DB["name"], host=MONGO_ANALYTICS_DB['host'], alias="nbanalytics"
-    )
+MONGOANALYTICSDB = connect(
+    db=MONGO_ANALYTICS_DB["name"], host=MONGO_ANALYTICS_DB['host'], alias="nbanalytics"
+)
 
 
 # =========

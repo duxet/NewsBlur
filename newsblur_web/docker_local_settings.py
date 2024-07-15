@@ -2,24 +2,11 @@ import logging
 import os
 
 # ===================
-# = Server Settings =
-# ===================
-
-ADMINS = ((os.getenv("ADMIN_NAME", "Samuel Clay"), os.getenv("ADMIN_EMAIL", "samuel@newsblur.local")),)
-
-SERVER_EMAIL = os.getenv("SERVER_EMAIL", "server@newsblur.local")
-HELLO_EMAIL = os.getenv("HELLO_EMAIL", "hello@newsblur.local")
-NEWSBLUR_URL = os.getenv("NEWSBLUR_URL", "https://localhost")
-PUSH_DOMAIN = os.getenv("PUSH_DOMAIN", "localhost")
-SESSION_COOKIE_DOMAIN = os.getenv("SESSION_COOKIE_DOMAIN", "localhost")
-
-# ===================
 # = Global Settings =
 # ===================
 
 DOCKERBUILD = True
-DEBUG = False
-# DEBUG = True
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
 # DEBUG_ASSETS controls JS/CSS asset packaging. Turning this off requires you to run
 # `./manage.py collectstatic` first. Turn this on for development so you can see
@@ -33,24 +20,6 @@ DEBUG_ASSETS = True
 DEBUG_QUERIES = DEBUG
 DEBUG_QUERIES_SUMMARY_ONLY = True
 # DEBUG_QUERIES_SUMMARY_ONLY = False
-
-MEDIA_URL = "/media/"
-IMAGES_URL = "/imageproxy"
-# Uncomment below to debug iOS/Android widget
-# IMAGES_URL = 'https://haproxy/imageproxy'
-SECRET_KEY = os.getenv("SECRET_KEY", "YOUR SECRET KEY")
-AUTO_PREMIUM_NEW_USERS = True
-AUTO_PREMIUM_ARCHIVE_NEW_USERS = True
-AUTO_PREMIUM_PRO_NEW_USERS = True
-AUTO_PREMIUM = True
-# AUTO_PREMIUM = False
-if not AUTO_PREMIUM:
-    AUTO_PREMIUM_NEW_USERS = False
-    AUTO_PREMIUM_ARCHIVE_NEW_USERS = False
-    AUTO_PREMIUM_PRO_NEW_USERS = False
-AUTO_ENABLE_NEW_USERS = True
-ENFORCE_SIGNUP_CAPTCHA = False
-ENABLE_PUSH = False
 
 PRO_MINUTES_BETWEEN_FETCHES = 15
 
@@ -167,15 +136,6 @@ MAILGUN_SERVER_NAME = "newsblur.com"
 DO_TOKEN_LOG = "0000000000000000000000000000000000000000000000000000000000000000"
 DO_TOKEN_FABRIC = "0000000000000000000000000000000000000000000000000000000000000000"
 
-SERVER_NAME = os.getenv("SERVER_NAME", "nblocalhost")
-NEWSBLUR_URL = os.getenv("NEWSBLUR_URL", "https://localhost")
-
-if NEWSBLUR_URL == "https://localhost":
-    SESSION_COOKIE_DOMAIN = "localhost"
-
 SESSION_ENGINE = "redis_sessions.session"
 
 # CORS_ORIGIN_REGEX_WHITELIST = ('^(https?://)?(\w+\.)?nb.local\.com$', )
-
-RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY", "0000000000000000000000000000000000000000")
-IMAGES_SECRET_KEY = os.getenv("IMAGES_SECRET_KEY", "0000000000000000000000000000000")
