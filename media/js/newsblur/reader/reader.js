@@ -5180,8 +5180,7 @@
                     "reconnection delay": 2000,
                     "connect timeout": 2000,
                     "path": "/v3/socket.io",
-                    "transports": ['websocket'],
-                    "upgrade": false
+                    "transports": ['polling'],
                 });
 
                 // this.socket.refresh_feeds = _.debounce(_.bind(this.force_feeds_refresh, this), 1000*10);
