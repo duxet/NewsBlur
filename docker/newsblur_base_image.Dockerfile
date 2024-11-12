@@ -22,7 +22,7 @@ RUN pip wheel -r ./requirements.txt
 
 RUN apk add --no-cache pcre2-dev \
     && cd /tmp \
-    && git clone --depth 1 -b 1.32.1-1 https://github.com/nginx/unit \
+    && git clone --depth 1 -b 1.33.0-1 https://github.com/nginx/unit \
     && cd unit \
     && ./configure \
     && ./configure python --config=/usr/local/bin/python3-config \
@@ -50,7 +50,7 @@ COPY . /srv/newsblur/
 
 COPY --from=builder /usr/local/lib/unit/modules/python3.unit.so /usr/lib/unit/modules/python3.unit.so
 
-ADD https://raw.githubusercontent.com/nginx/unit/1.32.1/pkg/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ADD https://raw.githubusercontent.com/nginx/unit/1.33.0/pkg/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
