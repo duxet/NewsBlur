@@ -417,21 +417,21 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": datetime.timedelta(hours=1),
         "options": {"queue": "cron_queue"},
     },
-    "collect-stats": {
-        "task": "collect-stats",
-        "schedule": datetime.timedelta(minutes=1),
-        "options": {"queue": "cron_queue"},
-    },
-    "collect-feedback": {
-        "task": "collect-feedback",
-        "schedule": datetime.timedelta(minutes=1),
-        "options": {"queue": "cron_queue"},
-    },
-    "share-popular-stories": {
-        "task": "share-popular-stories",
-        "schedule": datetime.timedelta(minutes=10),
-        "options": {"queue": "cron_queue"},
-    },
+    # "collect-stats": {
+    #     "task": "collect-stats",
+    #     "schedule": datetime.timedelta(minutes=1),
+    #     "options": {"queue": "cron_queue"},
+    # },
+    # "collect-feedback": {
+    #     "task": "collect-feedback",
+    #     "schedule": datetime.timedelta(minutes=1),
+    #     "options": {"queue": "cron_queue"},
+    # },
+    # "share-popular-stories": {
+    #     "task": "share-popular-stories",
+    #     "schedule": datetime.timedelta(minutes=10),
+    #     "options": {"queue": "cron_queue"},
+    # },
     "clean-analytics": {
         "task": "clean-analytics",
         "schedule": datetime.timedelta(hours=12),
