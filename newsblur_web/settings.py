@@ -660,8 +660,8 @@ ANYMAIL = {
 # = Mongo =
 # =========
 
-MONGO_COMMAND_LOGGER = MongoCommandLogger()
-monitoring.register(MONGO_COMMAND_LOGGER)
+# MONGO_COMMAND_LOGGER = MongoCommandLogger()
+# monitoring.register(MONGO_COMMAND_LOGGER)
 
 MONGO_DB_DEFAULTS = {
     "name": "newsblur",
