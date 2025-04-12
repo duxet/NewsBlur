@@ -49,14 +49,6 @@
         },
         {
             "match": {
-                "uri": "/rss_feeds/icon/*"
-            },
-            "action": {
-                "proxy": "http://newsblur_node:8008"
-            }
-        },
-        {
-            "match": {
                 "uri": "/rss_feeds/original_text_fetcher"
             },
             "action": {

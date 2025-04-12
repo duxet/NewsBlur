@@ -17,7 +17,6 @@ ENV_DOCKER = process.env.NODE_ENV == 'docker'
 
 original_page = require('./original_page.js').original_page
 original_text = require('./original_text.js').original_text
-favicons = require('./favicons.js').favicons
 unread_counts = require('./unread_counts.js').unread_counts
 
 if not ENV_DEV and not ENV_PROD and not ENV_DOCKER
@@ -34,7 +33,6 @@ if ENV_PROD
 
 original_page app
 original_text app
-favicons app
 unread_counts server
 
 if ENV_PROD
