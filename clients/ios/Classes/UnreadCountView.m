@@ -54,7 +54,7 @@ const int COUNT_HEIGHT = 18;
         CGRect rr;
         
         if (listType == NBFeedListSocial) {
-            if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+            if (!appDelegate.isPhone) {
                 rr = CGRectMake(rect.size.width + rect.origin.x - psOffset, CGRectGetMidY(r)-COUNT_HEIGHT/2, psWidth, COUNT_HEIGHT);
             } else {
                 rr = CGRectMake(rect.size.width + rect.origin.x - psOffset, CGRectGetMidY(r)-COUNT_HEIGHT/2, psWidth, COUNT_HEIGHT);
@@ -98,7 +98,7 @@ const int COUNT_HEIGHT = 18;
     if (nt > 0 && appDelegate.selectedIntelligence <= 0) {        
         CGRect rr;
         if (listType == NBFeedListSocial) {
-            if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+            if (!appDelegate.isPhone) {
                 rr = CGRectMake(rect.size.width + rect.origin.x - psWidth - psPadding - ntOffset, CGRectGetMidY(r)-COUNT_HEIGHT/2, ntWidth, COUNT_HEIGHT);
             } else {
                 rr = CGRectMake(rect.size.width + rect.origin.x - psWidth - psPadding - ntOffset, CGRectGetMidY(r)-COUNT_HEIGHT/2, ntWidth, COUNT_HEIGHT);
@@ -129,7 +129,7 @@ const int COUNT_HEIGHT = 18;
         [ntStr
          drawAtPoint:CGPointMake(rr.origin.x + x_pos, rr.origin.y + y_pos)
          withAttributes:@{NSFontAttributeName: indicatorFont,
-                          NSForegroundColorAttributeName:UIColorFromLightSepiaMediumDarkRGB(0xFFFFFF, 0xF8F8E9, 0x606060, 0x000000)}];
+                          NSForegroundColorAttributeName:UIColorFromLightSepiaMediumDarkRGB(0xFFFFFF, 0xFAF5ED, 0x606060, 0x000000)}];
     }
 }
 

@@ -13,6 +13,7 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import "NewsBlur-Swift.h"
 
+NSString * const ThemeStyleAuto = @"auto";
 NSString * const ThemeStyleLight = @"light";
 NSString * const ThemeStyleSepia = @"sepia";
 NSString * const ThemeStyleMedium = @"medium";
@@ -42,6 +43,7 @@ NSString * const ThemeStyleDark = @"dark";
 
 @property (nonatomic, readonly) NewsBlurAppDelegate *appDelegate;
 @property (nonatomic) BOOL justToggledViaGesture;
+@property (nonatomic) BOOL isAutoDark;
 
 @end
 
@@ -63,54 +65,116 @@ NSString * const ThemeStyleDark = @"dark";
 }
 
 - (NSString *)theme {
-    NSString *theme = [[NSUserDefaults standardUserDefaults] objectForKey:@"theme_style"];
-    
-    if (![self isValidTheme:theme]) {
-        theme = ThemeStyleLight;
+    NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+    NSString *themeStyle = [prefs objectForKey:@"theme_style"];
+
+    // Handle the new theme_style values: auto, light, dark
+    // These represent the mode, and we look up the actual theme variant
+    if ([themeStyle isEqualToString:@"light"]) {
+        // User chose light mode - use their light theme variant
+        NSString *lightVariant = [prefs objectForKey:@"theme_light"];
+        if ([lightVariant isEqualToString:ThemeStyleSepia]) {
+            return ThemeStyleSepia;
+        }
+        return ThemeStyleLight;
+    } else if ([themeStyle isEqualToString:@"dark"]) {
+        // User chose dark mode - use their dark theme variant
+        NSString *darkVariant = [prefs objectForKey:@"theme_dark"];
+        if ([darkVariant isEqualToString:ThemeStyleMedium]) {
+            return ThemeStyleMedium;
+        }
+        return ThemeStyleDark;
+    } else if ([themeStyle isEqualToString:ThemeStyleAuto] || themeStyle == nil) {
+        // Auto mode - return "auto" and let other methods handle system appearance
+        return ThemeStyleAuto;
     }
-    
-    return theme;
+
+    // Legacy support: if theme_style contains an actual theme value, use it directly
+    if ([self isValidTheme:themeStyle]) {
+        return themeStyle;
+    }
+
+    return ThemeStyleAuto;
 }
 
 - (void)setTheme:(NSString *)theme {
-    // Automatically turn off following the system appearance when manually changing the theme.
-    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"theme_follow_system"];
-    
     [self reallySetTheme:theme];
-    
+
     NSLog(@"Manually changed to theme: %@", self.themeDisplayName);  // log
 }
 
 - (void)reallySetTheme:(NSString *)theme {
-    if ([self isValidTheme:theme]) {
-        [[NSUserDefaults standardUserDefaults] setObject:theme forKey:@"theme_style"];
-        [self updateTheme];
+    if (![self isValidTheme:theme]) {
+        return;
     }
+
+    NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+
+    // Handle setting theme based on the actual theme value
+    // This supports both the old direct-theme API and sets up the new system correctly
+    if ([theme isEqualToString:ThemeStyleAuto]) {
+        [prefs setObject:@"auto" forKey:@"theme_style"];
+    } else if ([theme isEqualToString:ThemeStyleLight]) {
+        [prefs setObject:@"light" forKey:@"theme_style"];
+        [prefs setObject:ThemeStyleLight forKey:@"theme_light"];
+    } else if ([theme isEqualToString:ThemeStyleSepia]) {
+        [prefs setObject:@"light" forKey:@"theme_style"];
+        [prefs setObject:ThemeStyleSepia forKey:@"theme_light"];
+    } else if ([theme isEqualToString:ThemeStyleMedium]) {
+        [prefs setObject:@"dark" forKey:@"theme_style"];
+        [prefs setObject:ThemeStyleMedium forKey:@"theme_dark"];
+    } else if ([theme isEqualToString:ThemeStyleDark]) {
+        [prefs setObject:@"dark" forKey:@"theme_style"];
+        [prefs setObject:ThemeStyleDark forKey:@"theme_dark"];
+    }
+
+    [prefs synchronize];
+    [self updateTheme];
 }
 
 - (NSString *)themeDisplayName {
     NSString *theme = self.theme;
-    
+
     if ([theme isEqualToString:ThemeStyleDark]) {
-        return @"Dark";
+        return @"Black";
     } else if ([theme isEqualToString:ThemeStyleSepia]) {
-        return @"Sepia";
+        return @"Warm";
     } else if ([theme isEqualToString:ThemeStyleMedium]) {
-        return @"Medium";
-    } else {
+        return @"Gray";
+    } else if ([theme isEqualToString:ThemeStyleLight]) {
         return @"Light";
+    } else {
+        return @"Auto";
     }
 }
 
 - (NSString *)themeCSSSuffix {
     NSString *theme = self.theme;
-    
+
     if ([theme isEqualToString:ThemeStyleDark]) {
         return @"Dark";
-    } else if ([theme isEqualToString:ThemeStyleSepia]) {
-        return @"Sepia";
     } else if ([theme isEqualToString:ThemeStyleMedium]) {
         return @"Medium";
+    } else if ([theme isEqualToString:ThemeStyleSepia]) {
+        return @"Sepia";
+    } else if ([theme isEqualToString:ThemeStyleLight]) {
+        return @"Light";
+    } else if ([theme isEqualToString:ThemeStyleAuto]) {
+        // Auto mode: use system appearance to determine which variant to use
+        NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+        if (self.isSystemDark) {
+            NSString *darkVariant = [prefs objectForKey:@"theme_dark"];
+            if ([darkVariant isEqualToString:ThemeStyleMedium]) {
+                return @"Medium";
+            }
+            return @"Dark";
+        } else {
+            NSString *lightVariant = [prefs objectForKey:@"theme_light"];
+            if ([lightVariant isEqualToString:ThemeStyleSepia]) {
+                return @"Sepia";
+            }
+            return @"Light";
+        }
     } else {
         return @"Light";
     }
@@ -125,19 +189,56 @@ NSString * const ThemeStyleDark = @"dark";
         return ThemeStyleDark;
     } else if ([theme isEqualToString:ThemeStyleSepia]) {
         return ThemeStyleLight;
-    } else {
+    } else if ([theme isEqualToString:ThemeStyleLight]) {
         return ThemeStyleSepia;
+    } else {
+        return ThemeStyleAuto;
     }
+}
+
+- (BOOL)isAutoTheme {
+    NSString *themeStyle = [[NSUserDefaults standardUserDefaults] objectForKey:@"theme_style"];
+    return [themeStyle isEqualToString:ThemeStyleAuto] || themeStyle == nil;
 }
 
 - (BOOL)isDarkTheme {
     NSString *theme = self.theme;
-    
+
+    if ([theme isEqualToString:ThemeStyleAuto]) {
+        return self.isSystemDark;
+    }
+
     return [theme isEqualToString:ThemeStyleDark] || [theme isEqualToString:ThemeStyleMedium];
 }
 
+- (BOOL)isSystemDark {
+    return self.appDelegate.window.windowScene.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+}
+
+- (BOOL)isLikeSystem {
+    return self.isDarkTheme == self.isSystemDark;
+}
+
+- (NSString *)effectiveTheme {
+    // Returns the actual visual theme being displayed, resolving "auto" to the appropriate variant
+    NSString *theme = self.theme;
+
+    if ([theme isEqualToString:ThemeStyleAuto]) {
+        NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+        if (self.isSystemDark) {
+            NSString *darkVariant = [prefs objectForKey:@"theme_dark"];
+            return ([darkVariant isEqualToString:ThemeStyleMedium]) ? ThemeStyleMedium : ThemeStyleDark;
+        } else {
+            NSString *lightVariant = [prefs objectForKey:@"theme_light"];
+            return ([lightVariant isEqualToString:ThemeStyleSepia]) ? ThemeStyleSepia : ThemeStyleLight;
+        }
+    }
+
+    return theme;
+}
+
 - (BOOL)isValidTheme:(NSString *)theme {
-    return [theme isEqualToString:ThemeStyleLight] || [theme isEqualToString:ThemeStyleSepia] || [theme isEqualToString:ThemeStyleMedium] || [theme isEqualToString:ThemeStyleDark];
+    return [theme isEqualToString:ThemeStyleAuto] || [theme isEqualToString:ThemeStyleLight] || [theme isEqualToString:ThemeStyleSepia] || [theme isEqualToString:ThemeStyleMedium] || [theme isEqualToString:ThemeStyleDark];
 }
 
 - (NewsBlurAppDelegate *)appDelegate {
@@ -164,15 +265,34 @@ NSString * const ThemeStyleDark = @"dark";
 
 - (UIColor *)colorFromLightRGB:(NSInteger)lightRGBValue sepiaRGB:(NSUInteger)sepiaRGBValue mediumRGB:(NSUInteger)mediumRGBValue darkRGB:(NSUInteger)darkRGBValue {
     NSInteger rgbValue = lightRGBValue;
-    
-    if ([self.theme isEqualToString:ThemeStyleSepia]) {
+    NSString *theme = self.theme;
+
+    if ([theme isEqualToString:ThemeStyleAuto]) {
+        // Auto mode: use system appearance and respect user's variant preferences
+        NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+        if (self.isSystemDark) {
+            NSString *darkVariant = [prefs objectForKey:@"theme_dark"];
+            if ([darkVariant isEqualToString:ThemeStyleMedium]) {
+                rgbValue = mediumRGBValue;
+            } else {
+                rgbValue = darkRGBValue;
+            }
+        } else {
+            NSString *lightVariant = [prefs objectForKey:@"theme_light"];
+            if ([lightVariant isEqualToString:ThemeStyleSepia]) {
+                rgbValue = sepiaRGBValue;
+            } else {
+                rgbValue = lightRGBValue;
+            }
+        }
+    } else if ([theme isEqualToString:ThemeStyleSepia]) {
         rgbValue = sepiaRGBValue;
-    } else if ([self.theme isEqualToString:ThemeStyleMedium]) {
+    } else if ([theme isEqualToString:ThemeStyleMedium]) {
         rgbValue = mediumRGBValue;
-    } else if ([self.theme isEqualToString:ThemeStyleDark]) {
+    } else if ([theme isEqualToString:ThemeStyleDark]) {
         rgbValue = darkRGBValue;
     }
-    
+
     return [self fixedColorFromRGB:rgbValue];
 }
 
@@ -181,13 +301,24 @@ NSString * const ThemeStyleDark = @"dark";
     CGFloat red = ((rgbValue & 0xFF0000) >> 16) / 255.0;
     CGFloat green = ((rgbValue & 0xFF00) >> 8) / 255.0;
     CGFloat blue = ((rgbValue & 0xFF)) / 255.0;
-    
+
     // Debug method to log all of the unique colors; leave commented out
-//        [self debugColor:rgbValue]; 
-    
-    if ([theme isEqualToString:ThemeStyleDark]) {
+//        [self debugColor:rgbValue];
+
+    // For auto mode, determine which variant to use based on system appearance and user preferences
+    NSString *effectiveTheme = theme;
+    if ([theme isEqualToString:ThemeStyleAuto]) {
+        NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+        if (self.isSystemDark) {
+            effectiveTheme = [prefs objectForKey:@"theme_dark"] ?: ThemeStyleDark;
+        } else {
+            effectiveTheme = [prefs objectForKey:@"theme_light"] ?: ThemeStyleLight;
+        }
+    }
+
+    if ([effectiveTheme isEqualToString:ThemeStyleDark]) {
         return [UIColor colorWithRed:1.0 - red green:1.0 - green blue:1.0 - blue alpha:1.0];
-    } else if ([theme isEqualToString:ThemeStyleMedium]) {
+    } else if ([effectiveTheme isEqualToString:ThemeStyleMedium]) {
         if (rgbValue == 0x8F918B) {
             return [UIColor colorWithWhite:0.7 alpha:1.0];
         } else if (rgbValue == NEWSBLUR_LINK_COLOR) {
@@ -199,11 +330,29 @@ NSString * const ThemeStyleDark = @"dark";
         } else {
             return [UIColor colorWithRed:red - 0.7 green:green - 0.7 blue:blue - 0.7 alpha:1.0];
         }
-    } else if ([theme isEqualToString:ThemeStyleSepia]) {
-        CGFloat outputRed = (red * 0.393) + (green * 0.769) + (blue * 0.189);
-        CGFloat outputGreen = (red * 0.349) + (green * 0.686) + (blue * 0.168);
-        CGFloat outputBlue = (red * 0.272) + (green * 0.534) + (blue * 0.131);
-        
+    } else if ([effectiveTheme isEqualToString:ThemeStyleSepia]) {
+        // Special cases for common colors to ensure warm sepia tones
+        if (rgbValue == 0xFFFFFF || rgbValue == 0xffffff) {
+            // White -> warm cream (0xFAF5ED)
+            return [UIColor colorWithRed:0xFA/255.0 green:0xF5/255.0 blue:0xED/255.0 alpha:1.0];
+        } else if (rgbValue == 0xECEEEA) {
+            // Light gray-green -> warm sepia (0xF3E2CB)
+            return [UIColor colorWithRed:0xF3/255.0 green:0xE2/255.0 blue:0xCB/255.0 alpha:1.0];
+        } else if (rgbValue == 0xf4f4f4 || rgbValue == 0xF4F4F4) {
+            // Light gray -> warm light sepia (0xF3E2CB)
+            return [UIColor colorWithRed:0xF3/255.0 green:0xE2/255.0 blue:0xCB/255.0 alpha:1.0];
+        } else if (rgbValue == 0xE9E8E4) {
+            // Separator gray -> warm sepia separator (0xD4C8B8)
+            return [UIColor colorWithRed:0xD4/255.0 green:0xC8/255.0 blue:0xB8/255.0 alpha:1.0];
+        } else if (rgbValue == 0xE3E6E0) {
+            // Toolbar gray-green -> warm sepia (0xF3E2CB)
+            return [UIColor colorWithRed:0xF3/255.0 green:0xE2/255.0 blue:0xCB/255.0 alpha:1.0];
+        }
+        // Warm sepia matrix - lighter and warmer, less yellow/green
+        CGFloat outputRed = (red * 0.42) + (green * 0.75) + (blue * 0.17);
+        CGFloat outputGreen = (red * 0.36) + (green * 0.68) + (blue * 0.14);
+        CGFloat outputBlue = (red * 0.26) + (green * 0.52) + (blue * 0.10);
+
         return [UIColor colorWithRed:outputRed green:outputGreen blue:outputBlue alpha:1.0];
     } else {
         return [UIColor colorWithRed:red green:green blue:blue alpha:1.0];
@@ -243,7 +392,7 @@ NSString * const ThemeStyleDark = @"dark";
 
 - (void)updateNavigationController:(UINavigationController *)navigationController {
     navigationController.navigationBar.tintColor = [UINavigationBar appearance].tintColor;
-    navigationController.navigationBar.barTintColor = UIColorFromLightSepiaMediumDarkRGB(0xE3E6E0, 0xFFFFC5, 0x222222, 0x111111);
+    navigationController.navigationBar.barTintColor = UIColorFromLightSepiaMediumDarkRGB(0xE3E6E0, 0xF3E2CB, 0x222222, 0x111111);
     navigationController.navigationBar.backgroundColor = [UINavigationBar appearance].backgroundColor;
 }
 
@@ -266,7 +415,9 @@ NSString * const ThemeStyleDark = @"dark";
 
 - (void)updateSegmentedControl:(UISegmentedControl *)segmentedControl {
     segmentedControl.tintColor = UIColorFromRGB(0x8F918B);
+#if !TARGET_OS_MACCATALYST
     segmentedControl.backgroundColor = UIColorFromLightDarkRGB(0xe7e6e7, 0x303030);
+#endif
     segmentedControl.selectedSegmentTintColor = UIColorFromLightDarkRGB(0xffffff, 0x6f6f75);
     
     [self updateTextAttributesForSegmentedControl:segmentedControl forState:UIControlStateNormal foregroundColor:UIColorFromLightDarkRGB(0x909090, 0xaaaaaa)];
@@ -274,8 +425,12 @@ NSString * const ThemeStyleDark = @"dark";
 }
 
 - (void)updateThemeSegmentedControl:(UISegmentedControl *)segmentedControl {
+    [self updateSegmentedControl:segmentedControl];
+    
     segmentedControl.tintColor = [UIColor clearColor];
+#if !TARGET_OS_MACCATALYST
     segmentedControl.backgroundColor = [UIColor clearColor];
+#endif
     segmentedControl.selectedSegmentTintColor = [UIColor clearColor];
 }
 
@@ -292,6 +447,14 @@ NSString * const ThemeStyleDark = @"dark";
 }
 
 - (void)prepareForWindow:(UIWindow *)window {
+    NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+    
+    // Can remove this once everyone has updated to version 13.1.2 or later.
+    if ([prefs boolForKey:@"theme_follow_system"]) {
+        self.theme = ThemeStyleAuto;
+        [prefs setBool:NO forKey:@"theme_follow_system"];
+    }
+    
     [self autoChangeTheme];
     [self setupTheme];
     [self addThemeGestureRecognizerToView:window];
@@ -301,11 +464,11 @@ NSString * const ThemeStyleDark = @"dark";
 
 - (void)setupTheme {
     [UINavigationBar appearance].tintColor = UIColorFromLightSepiaMediumDarkRGB(0x0, 0x0, 0x9a8f73, 0x9a8f73);
-    [UINavigationBar appearance].barTintColor = UIColorFromLightSepiaMediumDarkRGB(0xE3E6E0, 0xFFFFC5, 0x333333, 0x222222);
-    [UINavigationBar appearance].backgroundColor = UIColorFromLightSepiaMediumDarkRGB(0xE3E6E0, 0xFFFFC5, 0x333333, 0x222222);
-    [UINavigationBar appearance].titleTextAttributes = @{NSForegroundColorAttributeName : UIColorFromLightSepiaMediumDarkRGB(0x8F918B, 0x8F918B, 0x8F918B, 0x8F918B)};
-    [UIToolbar appearance].barTintColor = UIColorFromLightSepiaMediumDarkRGB(0xE3E6E0, 0xFFFFC5, 0x4A4A4A, 0x222222);
-    [UISegmentedControl appearance].tintColor = UIColorFromLightSepiaMediumDarkRGB(0x8F918B, 0x8F918B, 0x8F918B, 0x8F918B);
+    [UINavigationBar appearance].barTintColor = UIColorFromLightSepiaMediumDarkRGB(0xE3E6E0, 0xF3E2CB, 0x333333, 0x222222);
+    [UINavigationBar appearance].backgroundColor = UIColorFromLightSepiaMediumDarkRGB(0xE3E6E0, 0xF3E2CB, 0x333333, 0x222222);
+    [UINavigationBar appearance].titleTextAttributes = @{NSForegroundColorAttributeName : UIColorFromLightSepiaMediumDarkRGB(0x8F918B, 0x8B7B6B, 0x8F918B, 0x8F918B)};
+    [UIToolbar appearance].barTintColor = UIColorFromLightSepiaMediumDarkRGB(0xE3E6E0, 0xF3E2CB, 0x4A4A4A, 0x222222);
+    [UISegmentedControl appearance].tintColor = UIColorFromLightSepiaMediumDarkRGB(0x8F918B, 0x8B7B6B, 0x8F918B, 0x8F918B);
     
     UIBarStyle style = self.isDarkTheme ? UIBarStyleBlack : UIBarStyleDefault;
     
@@ -323,10 +486,14 @@ NSString * const ThemeStyleDark = @"dark";
     NSString *theme = self.theme;
     NewsBlurAppDelegate *appDelegate = self.appDelegate;
     
-    if (self.isDarkTheme) {
-        [prefs setObject:theme forKey:@"theme_dark"];
+    if (self.isAutoTheme) {
+        self.isAutoDark = self.isSystemDark;
     } else {
-        [prefs setObject:theme forKey:@"theme_light"];
+        if (self.isDarkTheme) {
+            [prefs setObject:theme forKey:@"theme_dark"];
+        } else {
+            [prefs setObject:theme forKey:@"theme_light"];
+        }
     }
     
     [self setupTheme];
@@ -343,13 +510,7 @@ NSString * const ThemeStyleDark = @"dark";
 }
 
 - (void)updatePreferencesTheme {
-    NewsBlurAppDelegate *appDelegate = self.appDelegate;
-    UIBarButtonItem *item = [appDelegate.preferencesViewController.navigationController.navigationBar.items.firstObject rightBarButtonItem];
-    
-    item.tintColor = UIColorFromRGB(0x333333);
-    appDelegate.preferencesViewController.navigationController.navigationBar.titleTextAttributes = @{NSForegroundColorAttributeName : UIColorFromRGB(NEWSBLUR_BLACK_COLOR)};
-    appDelegate.preferencesViewController.navigationController.navigationBar.tintColor = UIColorFromRGB(NEWSBLUR_BLACK_COLOR);
-    appDelegate.preferencesViewController.navigationController.navigationBar.barTintColor = UIColorFromRGB(0xE3E6E0);
+    // SwiftUI PreferencesView handles its own theming
 }
 
 - (BOOL)autoChangeTheme {
@@ -402,61 +563,92 @@ NSString * const ThemeStyleDark = @"dark";
 
 - (void)handleThemeGesture:(UIPanGestureRecognizer *)recognizer {
     NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
-    
+
     if (recognizer.state != UIGestureRecognizerStateChanged || [prefs boolForKey:@"theme_auto_toggle"] || ![prefs boolForKey:@"theme_gesture"]) {
         self.justToggledViaGesture = NO;
         return;
     }
-    
+
     CGPoint translation = [recognizer translationInView:recognizer.view];
-    
+
     if (self.justToggledViaGesture || fabs(translation.x) > 50.0 || fabs(translation.y) < 50.0) {
         return;
     }
-    
+
     BOOL isUpward = translation.y > 0.0;
-    NSString *isTheme = self.theme;
-    NSString *wantTheme = nil;
-    
-    if (isUpward) {
-        wantTheme = [prefs objectForKey:@"theme_dark"];
+    NSString *themeStyle = [prefs objectForKey:@"theme_style"];
+    NSString *currentTheme = self.theme;
+
+    // Swipe up = darker, swipe down = lighter
+    if ([themeStyle isEqualToString:@"light"]) {
+        // In light mode: toggle between light and sepia
+        NSString *newVariant = [currentTheme isEqualToString:ThemeStyleSepia] ? ThemeStyleLight : ThemeStyleSepia;
+        [prefs setObject:newVariant forKey:@"theme_light"];
+    } else if ([themeStyle isEqualToString:@"dark"]) {
+        // In dark mode: toggle between gray (medium) and black (dark)
+        NSString *newVariant = [currentTheme isEqualToString:ThemeStyleMedium] ? ThemeStyleDark : ThemeStyleMedium;
+        [prefs setObject:newVariant forKey:@"theme_dark"];
     } else {
-        wantTheme = [prefs objectForKey:@"theme_light"];
+        // Auto mode or legacy: swipe switches between light and dark theme families
+        if (isUpward) {
+            // Swipe up = go darker
+            NSString *darkVariant = [prefs objectForKey:@"theme_dark"];
+            if (!darkVariant) darkVariant = ThemeStyleDark;
+            if ([currentTheme isEqualToString:darkVariant]) {
+                // Already on dark variant, toggle to other dark variant
+                darkVariant = [currentTheme isEqualToString:ThemeStyleMedium] ? ThemeStyleDark : ThemeStyleMedium;
+                [prefs setObject:darkVariant forKey:@"theme_dark"];
+            }
+            [self reallySetTheme:darkVariant];
+        } else {
+            // Swipe down = go lighter
+            NSString *lightVariant = [prefs objectForKey:@"theme_light"];
+            if (!lightVariant) lightVariant = ThemeStyleLight;
+            if ([currentTheme isEqualToString:lightVariant]) {
+                // Already on light variant, toggle to other light variant
+                lightVariant = [currentTheme isEqualToString:ThemeStyleSepia] ? ThemeStyleLight : ThemeStyleSepia;
+                [prefs setObject:lightVariant forKey:@"theme_light"];
+            }
+            [self reallySetTheme:lightVariant];
+        }
     }
-    
-    if ([isTheme isEqualToString:wantTheme]) {
-        wantTheme = [self similarTheme];
-    }
-    
-    self.theme = wantTheme;
+
     self.justToggledViaGesture = YES;
-    
+
     NSLog(@"Swiped to theme: %@", self.themeDisplayName);  // log
-    
+
     [self updateTheme];
-    
-    // Play a click sound, like a light switch; might want to use a custom sound instead?
+
+    // Play a click sound, like a light switch
     AudioServicesPlaySystemSound(1105);
 }
 
 - (void)updateForSystemAppearance {
-    BOOL isDark = self.appDelegate.window.windowScene.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
-    
-    [self systemAppearanceDidChange:isDark];
+    [self systemAppearanceDidChange:self.isSystemDark];
 }
 
 - (void)systemAppearanceDidChange:(BOOL)isDark {
     NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
     NSString *wantTheme = nil;
     
-    if (![prefs boolForKey:@"theme_follow_system"]) {
+    if (!self.isAutoTheme) {
         return;
     }
     
-    if (isDark) {
-        wantTheme = [prefs objectForKey:@"theme_dark"];
+    if (self.isAutoTheme) {
+        if (isDark != self.isAutoDark) {
+            [self updateTheme];
+            
+            NSLog(@"System changed to %@ appearance", isDark ? @"dark" : @"light");  // log
+        }
+        
+        return;
     } else {
-        wantTheme = [prefs objectForKey:@"theme_light"];
+        if (isDark) {
+            wantTheme = [prefs objectForKey:@"theme_dark"];
+        } else {
+            wantTheme = [prefs objectForKey:@"theme_light"];
+        }
     }
     
     if (self.theme != wantTheme) {

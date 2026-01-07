@@ -19,7 +19,7 @@ DEBUG_ASSETS = True
 # down verbosity.
 DEBUG_QUERIES = DEBUG
 DEBUG_QUERIES_SUMMARY_ONLY = True
-# DEBUG_QUERIES_SUMMARY_ONLY = False
+DEBUG_QUERIES_SUMMARY_ONLY = False
 
 PRO_MINUTES_BETWEEN_FETCHES = 15
 
@@ -29,7 +29,7 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6579"))
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://db_redis:6579/6",
+        "LOCATION": "redis://newsblur_db_redis:6579/6",
     },
 }
 
@@ -86,10 +86,10 @@ MONGO_ANALYTICS_DB = {
     "host": MONGO_HOST,
 }
 
-MONGODB_SLAVE = {"host": "db_mongo"}
+MONGODB_SLAVE = {"host": "newsblur_db_mongo"}
 
 # Celery RabbitMQ/Redis Broker
-BROKER_URL = "redis://db_redis:6579/0"
+BROKER_URL = "redis://newsblur_db_redis:6579/0"
 CELERY_RESULT_BACKEND = BROKER_URL
 CELERY_WORKER_CONCURRENCY = 1
 
@@ -101,18 +101,23 @@ REDIS_SESSIONS = {"host": REDIS_HOST, "port": REDIS_PORT}
 CELERY_REDIS_DB_NUM = 4
 SESSION_REDIS_DB = 5
 
-ELASTICSEARCH_FEED_HOSTS = ["db_elasticsearch:9200"]
-ELASTICSEARCH_STORY_HOSTS = ["db_elasticsearch:9200"]
+ELASTICSEARCH_FEED_HOSTS = ["newsblur_db_elasticsearch:9200"]
+ELASTICSEARCH_STORY_HOSTS = ["newsblur_db_elasticsearch:9200"]
+ELASTICSEARCH_DISCOVER_HOSTS = ["newsblur_db_elasticsearch:9200"]
 
-ELASTICSEARCH_FEED_HOST = "http://db_elasticsearch:9200"
-ELASTICSEARCH_STORY_HOST = "http://db_elasticsearch:9200"
-
+ELASTICSEARCH_FEED_HOST = "http://newsblur_db_elasticsearch:9200"
+ELASTICSEARCH_STORY_HOST = "http://newsblur_db_elasticsearch:9200"
+ELASTICSEARCH_DISCOVER_HOST = "http://newsblur_db_elasticsearch:9200"
 BACKED_BY_AWS = {
     "pages_on_node": False,
     "pages_on_s3": False,
     "icons_on_s3": False,
 }
 
+OPENAI_API_KEY = "sk-svcacct-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+ANTHROPIC_API_KEY = "sk-ant-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+GOOGLE_GEMINI_API_KEY = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+ASK_AI_MODEL = "opus"  # Options: opus, gpt-5.1, gemini-3, grok-4.1
 
 # ===========
 # = Logging =
@@ -139,3 +144,10 @@ DO_TOKEN_FABRIC = "0000000000000000000000000000000000000000000000000000000000000
 SESSION_ENGINE = "redis_sessions.session"
 
 # CORS_ORIGIN_REGEX_WHITELIST = ('^(https?://)?(\w+\.)?nb.local\.com$', )
+
+RECAPTCHA_SECRET_KEY = "0000000000000000000000000000000000000000"
+IMAGES_SECRET_KEY = "0000000000000000000000000000000"
+
+# APNS settings for token-based authentication
+APNS_TEAM_ID = "XXXXXXXXXX"  # Apple Developer Team ID (10 characters)
+APNS_KEY_ID = "XXXXXXXXXX"  # APNS Key ID (10 characters)

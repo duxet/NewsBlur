@@ -11,8 +11,10 @@
 #import <UIKit/UIKit.h>
 
 #import "NSString+HTML.h"
+#import "Utilities.h"
 #import "NewsBlurAppDelegate.h"
 #import "ThemeManager.h"
+#import "PremiumManager.h"
 #import "StoriesCollection.h"
 #import "BaseViewController.h"
 #import "FeedsObjCViewController.h"

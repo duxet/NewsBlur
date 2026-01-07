@@ -173,18 +173,18 @@ static UIFont *textFont = nil;
     
     BOOL isHighlighted = cell.highlighted || cell.selected;
     UIColor *backgroundColor;
-    
-    backgroundColor = cell.isSocial ? UIColorFromRGB(0xD8E3DB) :
-                      cell.isSearch ? UIColorFromRGB(0xDBDFE6) :
-                      cell.isSaved ? UIColorFromRGB(0xDFDCD6) :
-                      UIColorFromRGB(0xF7F8F5);
 
+    backgroundColor = cell.isSocial ? UIColorFromLightSepiaMediumDarkRGB(0xD8E3DB, 0xE0D8D0, 0x3A3A3C, 0x2C2C2E) :
+                      cell.isSearch ? UIColorFromLightSepiaMediumDarkRGB(0xDBDFE6, 0xE0D8D0, 0x3A3A3C, 0x2C2C2E) :
+                      cell.isSaved ? UIColorFromLightSepiaMediumDarkRGB(0xDFDCD6, 0xE0D8D0, 0x3A3A3C, 0x2C2C2E) :
+                      UIColorFromLightSepiaMediumDarkRGB(0xF7F8F5, 0xF8ECD8, 0x48484A, 0x38383A);
+    
 //    [backgroundColor set];
     self.backgroundColor = backgroundColor;
     cell.backgroundColor = backgroundColor;
     
     if (isHighlighted) {
-        UIColor *highlightColor = UIColorFromLightSepiaMediumDarkRGB(0xFFFFD2, 0xFFFFD2, 0x304050, 0x000022);
+        UIColor *highlightColor = UIColorFromLightSepiaMediumDarkRGB(0xFFFFD2, 0xF7E9D8, 0x304050, 0x000022);
         
         CGContextSetFillColorWithColor(context, highlightColor.CGColor);
         UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:r cornerRadius:8];
@@ -219,7 +219,7 @@ static UIFont *textFont = nil;
     paragraphStyle.alignment = NSTextAlignmentLeft;
     CGSize faviconSize;
     if (cell.isSocial) {
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!cell.appDelegate.isPhone) {
             faviconSize = CGSizeMake(28, 28);
             UIImage *feedIcon = [Utilities roundCorneredImage:cell.feedFavicon radius:4 convertToSize:faviconSize];
             [feedIcon drawInRect:CGRectMake(9.0, CGRectGetMidY(r)-faviconSize.height/2, faviconSize.width, faviconSize.height)];
@@ -239,7 +239,7 @@ static UIFont *textFont = nil;
     } else {
         faviconSize = CGSizeMake(16, 16);
         UIImage *feedIcon = [Utilities roundCorneredImage:cell.feedFavicon radius:4 convertToSize:faviconSize];
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!cell.appDelegate.isPhone) {
             [feedIcon drawInRect:CGRectMake(12.0, CGRectGetMidY(r)-faviconSize.height/2, faviconSize.width, faviconSize.height)];
             [cell.feedTitle drawInRect:CGRectMake(36.0, titleOffsetY, r.size.width - ([cell.unreadCount offsetWidth] + 36) - 10, font.pointSize*1.4)
                    withAttributes:@{NSFontAttributeName: font,

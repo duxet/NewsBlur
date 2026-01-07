@@ -688,69 +688,35 @@ _.extend(NEWSBLUR.ReaderPreferences.prototype, {
                         $.make('div', { className: 'NB-preference-label' }, [
                             'After marking feed/folder read'
                         ])
+                    ]),
+                    $.make('div', { className: 'NB-preference NB-preference-showdiscover' }, [
+                        $.make('div', { className: 'NB-preference-options' }, [
+                            $.make('div', [
+                                $.make('input', { id: 'NB-preference-showdiscover-1', type: 'radio', name: 'show_discover', value: "true" }),
+                                $.make('label', { 'for': 'NB-preference-showdiscover-1' }, [
+                                    'Show discover sites popover above story titles'
+                                ])
+                            ]),
+                            $.make('div', [
+                                $.make('input', { id: 'NB-preference-showdiscover-0', type: 'radio', name: 'show_discover', value: "false" }),
+                                $.make('label', { 'for': 'NB-preference-showdiscover-0' }, [
+                                    'Hide discover sites popover'
+                                ])
+                            ])
+                        ]),
+                        $.make('div', { className: 'NB-preference-label' }, [
+                            'Discover sites'
+                        ])
                     ])
-
                 ]),
                 $.make('div', { className: 'NB-tab NB-tab-stories' }, [
                     $.make('div', { className: 'NB-preference NB-preference-story-share' }, [
-                        $.make('div', { className: 'NB-preference-options' }, [
-                            $.make('div', { className: 'NB-preference-option', title: 'Twitter' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-twitter', name: 'story_share_twitter' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-twitter' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Facebook' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-facebook', name: 'story_share_facebook' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-facebook' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Instapaper' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-instapaper', name: 'story_share_instapaper' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-instapaper' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Pinboard.in' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-pinboard', name: 'story_share_pinboard' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-pinboard' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Raindrop.io' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-raindrop', name: 'story_share_raindrop' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-raindrop' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Pinterest' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-pinterest', name: 'story_share_pinterest' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-pinterest' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Buffer' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-buffer', name: 'story_share_buffer' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-buffer' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Diigo' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-diigo', name: 'story_share_diigo' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-diigo' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Evernote' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-evernote', name: 'story_share_evernote' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-evernote' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Google+' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-googleplus', name: 'story_share_googleplus' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-googleplus' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Pocket (RIL)' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-readitlater', name: 'story_share_readitlater' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-readitlater' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Tumblr' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-tumblr', name: 'story_share_tumblr' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-tumblr' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Blogger' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-blogger', name: 'story_share_blogger' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-blogger' })
-                            ]),
-                            $.make('div', { className: 'NB-preference-option', title: 'Delicious' }, [
-                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-delicious', name: 'story_share_delicious' }),
-                                $.make('label', { 'for': 'NB-preference-story-share-delicious' })
+                        $.make('div', { className: 'NB-preference-options' }, _.map(NEWSBLUR.assets.third_party_sharing_services, function (label, key) {
+                            return $.make('div', { className: 'NB-preference-option', title: label }, [
+                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-share-' + key, name: 'story_share_' + key }),
+                                $.make('label', { 'for': 'NB-preference-story-share-' + key }, label)
                             ])
-                        ]),
+                        })),
                         $.make('div', { className: 'NB-preference-label' }, [
                             'Sharing services'
                         ])
@@ -828,7 +794,31 @@ _.extend(NEWSBLUR.ReaderPreferences.prototype, {
                             ])
                         ]),
                         $.make('div', { className: 'NB-preference-label' }, [
-                            'Story button placement'
+                            'Story side options placement'
+                        ]),
+                        $.make('div', { className: 'NB-preference-options' }, _.map(["email", "save", "train", "share", "related", "ask_ai"], function (label) {
+                            var label_title = label.charAt(0).toUpperCase() + label.slice(1);
+                            if (label === "ask_ai") {
+                                label_title = "Ask AI";
+                            }
+                            return $.make('div', { className: 'NB-preference-option NB-preference-story-sideoption', title: label_title }, [
+                                $.make('input', { type: 'checkbox', id: 'NB-preference-story-sideoption-' + label, name: 'show_sideoption_' + label }),
+                                $.make('label', { 'for': 'NB-preference-story-sideoption-' + label }, label_title)
+                            ])
+                        })),
+                        $.make('div', { className: 'NB-preference-label' }, [
+                            'Story side options buttons'
+                        ])
+                    ]),
+                    $.make('div', { className: 'NB-preference NB-preference-youtube-captions' }, [
+                        $.make('div', { className: 'NB-preference-options' }, [
+                            $.make('div', [
+                                $.make('input', { id: 'NB-preference-youtube-captions', type: 'checkbox', name: 'youtube_captions' }),
+                                $.make('label', { 'for': 'NB-preference-youtube-captions' }, 'Enable captions/subtitles for YouTube videos')
+                            ])
+                        ]),
+                        $.make('div', { className: 'NB-preference-label' }, [
+                            'YouTube Captions'
                         ])
                     ]),
                     $.make('div', { className: 'NB-preference NB-preference-highlights' }, [
@@ -1069,8 +1059,20 @@ _.extend(NEWSBLUR.ReaderPreferences.prototype, {
                 return false;
             }
         });
+        $('input[name=youtube_captions]', $modal).each(function () {
+            if (NEWSBLUR.Preferences.youtube_captions) {
+                $(this).prop('checked', true);
+                return false;
+            }
+        });
         $('input[name=open_feed_action]', $modal).each(function () {
             if ($(this).val() == NEWSBLUR.Preferences.open_feed_action) {
+                $(this).prop('checked', true);
+                return false;
+            }
+        });
+        $('input[name=show_discover]', $modal).each(function () {
+            if ($(this).val() == "" + NEWSBLUR.Preferences.show_discover) {
                 $(this).prop('checked', true);
                 return false;
             }
@@ -1182,6 +1184,10 @@ _.extend(NEWSBLUR.ReaderPreferences.prototype, {
                 $(this).prop('checked', true);
                 return false;
             }
+        });
+        _.each(["email", "save", "train", "share", "related", "ask_ai"], function (sideoption) {
+            var sideoption_name = "show_sideoption_" + sideoption;
+            $('input#NB-preference-story-sideoption-' + sideoption, $modal).prop('checked', NEWSBLUR.Preferences[sideoption_name]);
         });
         $('input[name=highlights]', $modal).each(function () {
             if ($(this).val() == "" + NEWSBLUR.Preferences.highlights) {

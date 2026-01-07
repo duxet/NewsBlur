@@ -26,6 +26,7 @@ from apps.analyzer.models import (
     MClassifierAuthor,
     MClassifierFeed,
     MClassifierTag,
+    MClassifierText,
     MClassifierTitle,
 )
 from apps.profile.forms import (
@@ -241,6 +242,7 @@ def set_view_setting(request):
     feed_read_filter_setting = request.POST.get("feed_read_filter_setting")
     feed_layout_setting = request.POST.get("feed_layout_setting")
     feed_dashboard_count_setting = request.POST.get("feed_dashboard_count_setting")
+    feed_stories_discover_setting = request.POST.get("feed_stories_discover_setting")
     view_settings = json.decode(request.user.profile.view_settings)
 
     setting = view_settings.get(feed_id, {})
@@ -256,6 +258,8 @@ def set_view_setting(request):
         setting["d"] = feed_dashboard_count_setting
     if feed_layout_setting:
         setting["l"] = feed_layout_setting
+    if feed_stories_discover_setting:
+        setting["s"] = feed_stories_discover_setting
 
     view_settings[feed_id] = setting
     request.user.profile.view_settings = json.encode(view_settings)
@@ -266,7 +270,7 @@ def set_view_setting(request):
         "~FMView settings: %s/%s/%s/%s"
         % (feed_view_setting, feed_order_setting, feed_read_filter_setting, feed_layout_setting),
     )
-    response = dict(code=code)
+    response = dict(code=code, view_settings=view_settings)
     return response
 
 
@@ -331,6 +335,38 @@ def set_collapsed_folders(request):
 def paypal_ipn(request):
     try:
         return paypal_standard_ipn(request)
+    except UnicodeDecodeError as e:
+        # PayPal may have returned an error page with non-ASCII characters instead of a proper IPN response
+        # Log comprehensive debugging info to diagnose the encoding issue
+        body = request.body
+        content_type = request.META.get("CONTENT_TYPE", "unknown")
+
+        # Try various encodings to see what works
+        encodings_tried = {}
+        for encoding in ["utf-8", "latin-1", "iso-8859-1", "windows-1252"]:
+            try:
+                decoded = body.decode(encoding)
+                encodings_tried[encoding] = f"SUCCESS (len={len(decoded)})"
+            except Exception as decode_error:
+                encodings_tried[encoding] = f"FAILED: {decode_error}"
+
+        # Get context around the problematic byte
+        error_pos = e.start if hasattr(e, "start") else 0
+        context_start = max(0, error_pos - 50)
+        context_end = min(len(body), error_pos + 50)
+        context_bytes = body[context_start:context_end]
+
+        logging.error(
+            f"PayPal IPN UnicodeDecodeError: {e}\n"
+            f"Content-Type: {content_type}\n"
+            f"Body length: {len(body)} bytes\n"
+            f"Error position: {error_pos}\n"
+            f"Context bytes (pos {context_start}-{context_end}): {context_bytes!r}\n"
+            f"Hex dump: {context_bytes.hex()}\n"
+            f"Encoding attempts: {encodings_tried}\n"
+            f"Full body (latin-1): {body.decode('latin-1', errors='replace')!r}"
+        )
+        return HttpResponse("Invalid PayPal IPN response encoding", status=400)
     except AssertionError:
         # Paypal may have sent webhooks to ipn, so redirect
         logging.user(request, f" ---> Paypal IPN to webhooks redirect: {request.body}")
@@ -428,6 +464,17 @@ def paypal_archive_return(request):
     return render(
         request,
         "reader/paypal_archive_return.xhtml",
+        {
+            "user_profile": request.user.profile,
+        },
+    )
+
+
+@login_required
+def paypal_pro_return(request):
+    return render(
+        request,
+        "reader/paypal_pro_return.xhtml",
         {
             "user_profile": request.user.profile,
         },
@@ -533,7 +580,7 @@ def save_ios_receipt(request):
             transaction_identifier,
             receipt,
         )
-        mail_admins(subject, message)
+        # mail_admins(subject, message)
     else:
         logging.user(
             request,
@@ -563,7 +610,7 @@ def save_android_receipt(request):
             product_id,
             order_id,
         )
-        mail_admins(subject, message)
+        # mail_admins(subject, message)
     else:
         logging.user(
             request, "~BM~FBNot sending Android Receipt email, already paid: %s %s" % (product_id, order_id)
@@ -688,7 +735,9 @@ def stripe_form(request):
 
 @login_required
 def switch_stripe_subscription(request):
-    plan = request.POST["plan"]
+    plan = request.POST.get("plan")
+    if not plan:
+        return HttpResponseRedirect(reverse("index"))
     if plan == "change_stripe":
         return stripe_checkout(request)
     elif plan == "change_paypal":
@@ -710,7 +759,9 @@ def switch_stripe_subscription(request):
 
 
 def switch_paypal_subscription(request):
-    plan = request.POST["plan"]
+    plan = request.POST.get("plan")
+    if not plan:
+        return HttpResponseRedirect(reverse("index"))
     if plan == "change_stripe":
         return stripe_checkout(request)
     elif plan == "change_paypal":
@@ -738,12 +789,14 @@ def switch_paypal_subscription(request):
 def stripe_checkout(request):
     stripe.api_key = settings.STRIPE_SECRET
     domain = Site.objects.get_current().domain
-    plan = request.POST["plan"]
+    plan = request.POST.get("plan")
+    if not plan:
+        return HttpResponseRedirect(reverse("index"))
 
     if plan == "change_stripe":
         checkout_session = stripe.billing_portal.Session.create(
             customer=request.user.profile.stripe_id,
-            return_url="https://%s%s?next=payments" % (domain, reverse('index')),
+            return_url="https://%s%s?next=payments" % (domain, reverse("index")),
         )
         return HttpResponseRedirect(checkout_session.url, status=303)
 
@@ -758,8 +811,8 @@ def stripe_checkout(request):
         ],
         "mode": "subscription",
         "metadata": {"newsblur_user_id": request.user.pk},
-        "success_url": "https://%s%s" % (domain, reverse('stripe-return')),
-        "cancel_url": "https://%s%s" % (domain, reverse('index')),
+        "success_url": "https://%s%s" % (domain, reverse("stripe-return")),
+        "cancel_url": "https://%s%s" % (domain, reverse("index")),
     }
     if request.user.profile.stripe_id:
         session_dict["customer"] = request.user.profile.stripe_id
@@ -813,6 +866,8 @@ def payment_history(request):
             "title_ng": MClassifierTitle.objects.filter(user_id=user.pk, score__lt=0).count(),
             "tag_ps": MClassifierTag.objects.filter(user_id=user.pk, score__gt=0).count(),
             "tag_ng": MClassifierTag.objects.filter(user_id=user.pk, score__lt=0).count(),
+            "text_ps": MClassifierText.objects.filter(user_id=user.pk, score__gt=0).count(),
+            "text_ng": MClassifierText.objects.filter(user_id=user.pk, score__lt=0).count(),
             "author_ps": MClassifierAuthor.objects.filter(user_id=user.pk, score__gt=0).count(),
             "author_ng": MClassifierAuthor.objects.filter(user_id=user.pk, score__lt=0).count(),
             "feed_ps": MClassifierFeed.objects.filter(user_id=user.pk, score__gt=0).count(),

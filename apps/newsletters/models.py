@@ -2,6 +2,7 @@ import datetime
 import re
 
 import redis
+import sentry_sdk
 from django.conf import settings
 from django.contrib.sites.models import Site
 from django.core.mail import EmailMultiAlternatives
@@ -21,10 +22,13 @@ from utils.story_functions import linkify
 
 class EmailNewsletter:
     def receive_newsletter(self, params):
+        logging.debug(f" ---> receive_newsletter called with recipient: {params.get('recipient')}")
         user = self._user_from_email(params["recipient"])
         if not user:
+            logging.debug(" ***> receive_newsletter: No user found, returning early")
             return
 
+        logging.debug(f" ---> receive_newsletter: Processing for user {user.username}")
         sender_name, sender_username, sender_domain = self._split_sender(params["from"])
         feed_address = self._feed_address(user, "%s@%s" % (sender_username, sender_domain))
 
@@ -90,12 +94,16 @@ class EmailNewsletter:
         story_hash = MStory.ensure_story_hash(params["signature"], feed.pk)
         story_content = self._get_content(params)
         plain_story_content = self._get_content(params, force_plain=True)
-        if len(plain_story_content) > len(story_content):
+        # apps/newsletters/models.py: Choose the longer content version if available
+        # Handle plain-text-only newsletters where body-html may be None
+        if story_content and plain_story_content and len(plain_story_content) > len(story_content):
             story_content = plain_story_content
-        story_content = self._clean_content(story_content)
+        elif plain_story_content and not story_content:
+            story_content = plain_story_content
+        story_content = self._clean_content(story_content or "")
         story_params = {
             "story_feed_id": feed.pk,
-            "story_date": datetime.datetime.fromtimestamp(int(params["timestamp"])),
+            "story_date": self._clean_story_date(params.get("timestamp")),
             "story_title": params["subject"],
             "story_content": story_content,
             "story_author_name": params["from"],
@@ -160,19 +168,25 @@ class EmailNewsletter:
         logging.user(user, "~BB~FM~SBSending first newsletter email to: %s" % user.email)
 
     def _user_from_email(self, email):
-        tokens = re.search("(\w+)[\+\-\.](\w+)@newsletters.newsblur.com", email)
+        # Support both @newsletters.newsblur.com and @improvmx.newsblur.com
+        tokens = re.search(r"(\w+)[\+\-\.](\w+)@(?:newsletters|improvmx)\.newsblur\.com", email)
         if not tokens:
+            logging.debug(f" ***> Newsletter email regex failed for: {email}")
             return
 
         username, secret_token = tokens.groups()
+        logging.debug(f" ---> Newsletter parsed email: username={username}, secret_token={secret_token}")
         try:
             profiles = Profile.objects.filter(secret_token=secret_token)
             if not profiles:
+                logging.debug(f" ***> No profile found for secret_token: {secret_token}")
                 return
             profile = profiles[0]
         except Profile.DoesNotExist:
+            logging.debug(f" ***> Profile.DoesNotExist for secret_token: {secret_token}")
             return
 
+        logging.debug(f" ---> Newsletter found user: {profile.user.username}")
         return profile.user
 
     def _feed_address(self, user, sender_email):
@@ -190,22 +204,71 @@ class EmailNewsletter:
 
         return sender_name, sender_username, sender_domain
 
+    def _clean_story_date(self, timestamp):
+        """
+        apps/newsletters/models.py: Convert timestamp to datetime.
+        If timestamp is empty or invalid, use current date.
+        """
+        if timestamp and str(timestamp).strip():
+            try:
+                return datetime.datetime.fromtimestamp(int(timestamp))
+            except (ValueError, TypeError):
+                return datetime.datetime.now()
+        else:
+            return datetime.datetime.now()
+
     def _get_content(self, params, force_plain=False):
-        if "body-enriched" in params and not force_plain:
+        # apps/newsletters/models.py: Check for enriched, html, and plain content
+        # Some newsletters only have plain text, so body-html may be None
+        if "body-enriched" in params and params["body-enriched"] and not force_plain:
             return params["body-enriched"]
-        if "body-html" in params and not force_plain:
+        if "body-html" in params and params["body-html"] and not force_plain:
             return params["body-html"]
-        if "stripped-html" in params and not force_plain:
+        if "stripped-html" in params and params["stripped-html"] and not force_plain:
             return params["stripped-html"]
-        if "body-plain" in params:
+        if "body-plain" in params and params["body-plain"]:
             return linkify(linebreaks(params["body-plain"]))
 
         if force_plain:
             return self._get_content(params, force_plain=False)
 
+        # apps/newsletters/models.py: No content found, capture in Sentry and log for debugging
+        with sentry_sdk.push_scope() as scope:
+            # Include all params for debugging, with size info for large values
+            params_info = {}
+            for key, value in params.items():
+                if isinstance(value, str):
+                    if len(value) > 1000:
+                        # Truncate large values but show first/last parts and size
+                        params_info[key] = f"[{len(value)} chars] {value[:200]}...{value[-200:]}"
+                    else:
+                        params_info[key] = value
+                else:
+                    params_info[key] = str(value)
+
+            scope.set_context(
+                "newsletter_params",
+                {
+                    "force_plain": force_plain,
+                    "all_params": params_info,
+                    "param_keys": list(params.keys()),
+                    "param_sizes": {k: len(str(v)) for k, v in params.items()},
+                },
+            )
+            sentry_sdk.capture_message("Newsletter content not found", level="error")
+
+        logging.error(
+            f" ***> Newsletter content not found. force_plain={force_plain}, "
+            f"recipient={params.get('recipient')}, from={params.get('from')}, "
+            f"subject={params.get('subject')}, available_keys={list(params.keys())}"
+        )
+        return ""
+
     def _clean_content(self, content):
         original = content
-        scrubber = Scrubber()
+        # Disable autolink since newsletter HTML already has proper anchor tags
+        # apps/newsletters/models.py
+        scrubber = Scrubber(autolink=False)
         content = scrubber.scrub(content)
         if len(content) < len(original) * 0.01:
             content = original

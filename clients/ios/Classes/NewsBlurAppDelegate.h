@@ -45,7 +45,6 @@
 @class UserProfileViewController;
 @class FeedChooserViewController;
 @class MenuViewController;
-@class IASKAppSettingsViewController;
 @class UnreadCounts;
 @class StoriesCollection;
 @class PINCache;
@@ -56,7 +55,7 @@
 
 @interface NewsBlurAppDelegate : BaseViewController
 <UIApplicationDelegate, UINavigationControllerDelegate, UIPopoverPresentationControllerDelegate,
-SFSafariViewControllerDelegate>  {
+SFSafariViewControllerDelegate, UIGestureRecognizerDelegate>  {
     UINavigationController *ftuxNavigationController;
     UINavigationController *feedsNavigationController;
     UINavigationController *modalNavigationController;
@@ -89,7 +88,6 @@ SFSafariViewControllerDelegate>  {
     OriginalStoryViewController *originalStoryViewController;
     UINavigationController *originalStoryViewNavController;
     UserProfileViewController *userProfileViewController;
-    IASKAppSettingsViewController *preferencesViewController;
     PremiumViewController *premiumViewController;
 
     AFHTTPSessionManager *networkManager;
@@ -190,7 +188,6 @@ SFSafariViewControllerDelegate>  {
 @property (nonatomic) IBOutlet ShareViewController *shareViewController;
 @property (nonatomic) IBOutlet FontSettingsViewController *fontSettingsViewController;
 @property (nonatomic) IBOutlet UserProfileViewController *userProfileViewController;
-@property (nonatomic) IBOutlet IASKAppSettingsViewController *preferencesViewController;
 @property (nonatomic,  strong) PremiumManager *premiumManager;
 @property (nonatomic) IBOutlet PremiumViewController *premiumViewController;
 @property (nonatomic, strong) UINavigationController *fontSettingsNavigationController;
@@ -229,6 +226,7 @@ SFSafariViewControllerDelegate>  {
 @property (readwrite) NSURL * activeOriginalStoryURL;
 @property (readwrite) NSDictionary * activeComment;
 @property (readwrite) NSString * activeShareType;
+@property (nonatomic, strong) id activeAskAIViewModel;
 @property (readwrite) NSInteger feedDetailPortraitYCoordinate;
 @property (readwrite) NSInteger originalStoryCount;
 @property (readwrite) NSInteger savedSearchesCount;
@@ -287,7 +285,6 @@ SFSafariViewControllerDelegate>  {
 @property (nonatomic, readwrite) BOOL hasQueuedReadStories;
 @property (nonatomic, readwrite) BOOL hasQueuedSavedStories;
 @property (nonatomic, readonly) BOOL showingSafariViewController;
-@property (nonatomic, readonly) BOOL isCompactWidth;
 //@property (nonatomic) CGFloat compactWidth;
 
 @property (nonatomic, strong) BGAppRefreshTask *backgroundAppRefreshTask;
@@ -296,6 +293,9 @@ SFSafariViewControllerDelegate>  {
 
 - (void)registerDefaultsFromSettingsBundle;
 - (void)finishBackground;
+- (void)prepareViewControllers;
+
+- (BOOL)openURL:(NSURL *)url;
 
 - (void)showFirstTimeUser;
 - (void)showLogin;
@@ -321,10 +321,10 @@ SFSafariViewControllerDelegate>  {
 - (void)showOrganizeSites;
 - (void)showWidgetSites;
 - (void)showPremiumDialog;
+- (void)showPremiumDialogForArchive;
 - (void)updateSplitBehavior:(BOOL)refresh;
 - (void)addSplitControlToMenuController:(MenuViewController *)menuViewController;
 - (void)showPreferences;
-- (void)setHiddenPreferencesAnimated:(BOOL)animated;
 - (void)resizePreviewSize;
 - (void)resizeFontSize;
 - (void)popToRootWithCompletion:(void (^)(void))completion;
@@ -339,6 +339,9 @@ SFSafariViewControllerDelegate>  {
 - (void)openStatisticsWithFeed:(NSString *)feedId sender:(id)sender;
 - (void)openTrainSiteWithFeedLoaded:(BOOL)feedLoaded from:(id)sender;
 - (void)openTrainStory:(id)sender;
+- (void)openAskAIDialog:(NSDictionary *)story;
+- (void)openAskAIDialog:(NSDictionary *)story sourceRect:(NSValue *)sourceRectValue;
+- (void)showAskAIInlineResponse;
 - (void)openUserTagsStory:(id)sender;
 - (void)loadFeedDetailView;
 - (void)loadFeedDetailView:(BOOL)transition;
@@ -395,7 +398,6 @@ SFSafariViewControllerDelegate>  {
 - (BOOL)isSavedStoriesIntelligenceMode;
 - (NSArray *)allFeedIds;
 - (NSArray *)feedIdsForFolderTitle:(NSString *)folderTitle;
-- (BOOL)isPortrait;
 - (void)confirmLogout;
 - (void)showConnectToService:(NSString *)serviceName;
 - (void)showAlert:(UIAlertController *)alert withViewController:(UIViewController *)vc;
@@ -439,6 +441,7 @@ SFSafariViewControllerDelegate>  {
 - (void)renameFolder:(NSString *)newTitle;
 
 - (void)showMarkReadMenuWithFeedIds:(NSArray *)feedIds collectionTitle:(NSString *)collectionTitle visibleUnreadCount:(NSInteger)visibleUnreadCount barButtonItem:(UIBarButtonItem *)barButtonItem completionHandler:(void (^)(BOOL marked))completionHandler;
+- (void)showMarkReadMenuWithFeedIds:(NSArray *)feedIds collectionTitle:(NSString *)collectionTitle visibleUnreadCount:(NSInteger)visibleUnreadCount sourceView:(UIView *)sourceView sourceRect:(CGRect)sourceRect completionHandler:(void (^)(BOOL marked))completionHandler;
 - (void)showMarkReadMenuWithFeedIds:(NSArray *)feedIds collectionTitle:(NSString *)collectionTitle sourceView:(UIView *)sourceView sourceRect:(CGRect)sourceRect completionHandler:(void (^)(BOOL marked))completionHandler;
 - (void)showMarkOlderNewerReadMenuWithStoriesCollection:(StoriesCollection *)olderNewerCollection story:(NSDictionary *)olderNewerStory sourceView:(UIView *)sourceView sourceRect:(CGRect)sourceRect extraItems:(NSArray *)extraItems completionHandler:(void (^)(BOOL marked))completionHandler;
 
@@ -446,6 +449,7 @@ SFSafariViewControllerDelegate>  {
 - (void)showPopoverWithViewController:(UIViewController *)viewController contentSize:(CGSize)contentSize barButtonItem:(UIBarButtonItem *)barButtonItem;
 - (void)showPopoverWithViewController:(UIViewController *)viewController contentSize:(CGSize)contentSize sourceView:(UIView *)sourceView sourceRect:(CGRect)sourceRect;
 - (void)showPopoverWithViewController:(UIViewController *)viewController contentSize:(CGSize)contentSize sourceView:(UIView *)sourceView sourceRect:(CGRect)sourceRect permittedArrowDirections:(UIPopoverArrowDirection)permittedArrowDirections;
+
 - (void)hidePopoverAnimated:(BOOL)animated completion:(void (^)(void))completion;
 - (BOOL)hidePopoverAnimated:(BOOL)animated;
 - (void)hidePopover;

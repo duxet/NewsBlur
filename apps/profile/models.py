@@ -31,6 +31,7 @@ from zebra.signals import (
     zebra_webhook_customer_subscription_updated,
 )
 
+from apps.ask_ai.usage import AskAIUsageTracker
 from apps.feed_import.models import OPMLExporter
 from apps.reader.models import RUserStory, UserSubscription
 from apps.rss_feeds.models import Feed, MStarredStory, MStory
@@ -90,7 +91,7 @@ class Profile(models.Model):
             if settings.DEBUG:
                 price = "price_0KK5tVwdsmP8XBlaXW1vYUn9"
         elif plan == "pro":
-            price = "price_0KK5cvwdsmP8XBlaZDq068bA"
+            price = "price_0KK5cvwdsmP8XBla2tFdDhpy"
             if settings.DEBUG:
                 price = "price_0KK5twwdsmP8XBlasifbX56Z"
         return price
@@ -107,10 +108,14 @@ class Profile(models.Model):
             if settings.DEBUG:
                 price = "P-2EG40290653242115MHZROQQ"
         elif plan == "pro":
-            price = "price_0KK5cvwdsmP8XBlaZDq068bA"
+            price = "price_0KK5cvwdsmP8XBla2tFdDhpy"
             if settings.DEBUG:
                 price = "price_0KK5twwdsmP8XBlasifbX56Z"
         return price
+
+    @property
+    def premium_available_text_classifiers(self):
+        return self.is_archive or self.is_pro
 
     @property
     def unread_cutoff(self, force_premium=False, force_archive=False):
@@ -131,6 +136,17 @@ class Profile(models.Model):
         if self.is_archive:
             return settings.DAYS_OF_STORY_HASHES_ARCHIVE
         return settings.DAYS_OF_STORY_HASHES
+
+    def can_use_ask_ai(self):
+        return AskAIUsageTracker(self.user).can_use()
+
+    def increment_ask_ai_usage(self, question_id=None, story_hash=None, request_id=None, cached=False):
+        AskAIUsageTracker(self.user).record_usage(
+            question_id=question_id, story_hash=story_hash, request_id=request_id, cached=cached
+        )
+
+    def get_ask_ai_usage_message(self):
+        return AskAIUsageTracker(self.user).get_usage_message()
 
     def canonical(self):
         return {
@@ -329,6 +345,14 @@ class Profile(models.Model):
                     sub.save()
                 except (IntegrityError, Feed.DoesNotExist):
                     pass
+
+        # When upgrading to archive, reset MUserSearch discovery indexes
+        if not was_archive:
+            from apps.search.models import MUserSearch
+
+            MUserSearch.objects.filter(user_id=self.user.pk).update(
+                discover_indexed=False, discover_indexing=False
+            )
 
         # Count subscribers to turn on archive_subscribers counts, then show that count to users
         # on the paypal_archive_return page.
@@ -1946,7 +1970,10 @@ def paypal_signup(sender, **kwargs):
 
     if not user and ipn_obj.custom:
         try:
-            user = User.objects.get(pk=ipn_obj.custom)
+            if str(ipn_obj.custom).isdigit():
+                user = User.objects.get(pk=ipn_obj.custom)
+            else:
+                user = User.objects.get(username__iexact=ipn_obj.custom)
         except User.DoesNotExist:
             pass
 

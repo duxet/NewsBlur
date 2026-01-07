@@ -1,220 +1,555 @@
-from itertools import groupby
+import datetime
 
-# from apps.analyzer.classifier import FisherClassifier
-import nltk
-from django.core import management
-from django.test import TestCase
+from django.contrib.auth.models import User
+from django.test import TestCase, TransactionTestCase
 from django.test.client import Client
+from django.urls import reverse
 
-from apps.analyzer.phrase_filter import PhraseFilter
-from apps.analyzer.tokenizer import Tokenizer
-from apps.rss_feeds.models import MStory
-from vendor.reverend.thomas import Bayes
-
-
-class QuadgramCollocationFinder(nltk.collocations.AbstractCollocationFinder):
-    """A tool for the finding and ranking of quadgram collocations or other association measures.
-    It is often useful to use from_words() rather thanconstructing an instance directly.
-    """
-
-    def __init__(self, word_fd, quadgram_fd, trigram_fd, bigram_fd, wildcard_fd):
-        """Construct a TrigramCollocationFinder, given FreqDists for appearances of words, bigrams, two words with any word between them,and trigrams."""
-        nltk.collocations.AbstractCollocationFinder.__init__(self, word_fd, quadgram_fd)
-        self.trigram_fd = trigram_fd
-        self.bigram_fd = bigram_fd
-        self.wildcard_fd = wildcard_fd
-
-    @classmethod
-    def from_words(cls, words):
-        wfd = nltk.probability.FreqDist()
-        qfd = nltk.probability.FreqDist()
-        tfd = nltk.probability.FreqDist()
-        bfd = nltk.probability.FreqDist()
-        wildfd = nltk.probability.FreqDist()
-
-        for w1, w2, w3, w4 in nltk.util.ingrams(words, 4, pad_right=True):
-            wfd.inc(w1)
-            if w4 is None:
-                continue
-            else:
-                qfd.inc((w1, w2, w3, w4))
-            bfd.inc((w1, w2))
-            tfd.inc((w1, w2, w3))
-            wildfd.inc((w1, w3, w4))
-            wildfd.inc((w1, w2, w4))
-
-        return cls(wfd, qfd, tfd, bfd, wildfd)
-
-    def score_ngram(self, score_fn, w1, w2, w3, w4):
-        n_all = self.word_fd.N()
-        n_iiii = self.ngram_fd[(w1, w2, w3, w4)]
-        if not n_iiii:
-            return
-        n_iiix = self.bigram_fd[(w1, w2)]
-        n_iixi = self.bigram_fd[(w2, w3)]
-        n_ixii = self.bigram_fd[(w3, w4)]
-        n_xiii = self.bigram_fd[(w3, w4)]
-        n_iixx = self.word_fd[w1]
-        n_ixix = self.word_fd[w2]
-        n_ixxi = self.word_fd[w3]
-        n_ixxx = self.word_fd[w4]
-        n_xiix = self.trigram_fd[(w1, w2)]
-        n_xixi = self.trigram_fd[(w2, w3)]
-        n_xxii = self.trigram_fd[(w3, w4)]
-        n_xxxi = self.trigram_fd[(w3, w4)]
-        return score_fn(
-            n_iiii,
-            (n_iiix, n_iixi, n_ixii, n_xiii),
-            (n_iixx, n_ixix, n_ixxi, n_ixxx),
-            (n_xiix, n_xixi, n_xxii, n_xxxi),
-            n_all,
-        )
+from apps.analyzer.models import (
+    MClassifierAuthor,
+    MClassifierFeed,
+    MClassifierTag,
+    MClassifierText,
+    MClassifierTitle,
+    apply_classifier_authors,
+    apply_classifier_feeds,
+    apply_classifier_tags,
+    apply_classifier_texts,
+    apply_classifier_titles,
+    compute_story_score,
+    get_classifiers_for_user,
+)
+from apps.reader.models import UserSubscription
+from apps.rss_feeds.models import Feed
+from utils import json_functions as json
 
 
-class CollocationTest(TestCase):
-    fixtures = ["brownstoner.json"]
+class Test_Classifiers(TransactionTestCase):
+    fixtures = [
+        "apps/rss_feeds/fixtures/initial_data.json",
+        "apps/rss_feeds/fixtures/rss_feeds.json",
+    ]
 
     def setUp(self):
         self.client = Client()
+        # Create user
+        self.user = User.objects.create_user(username="testuser", password="testpass", email="test@test.com")
+        self.feed = Feed.objects.get(pk=1)
+        # Create subscription
+        UserSubscription.objects.create(user=self.user, feed=self.feed, is_trained=False)
 
-    def test_bigrams(self):
-        # bigram_measures = nltk.collocations.BigramAssocMeasures()
-        trigram_measures = nltk.collocations.TrigramAssocMeasures()
+    def tearDown(self):
+        # Clean up MongoDB classifiers
+        MClassifierTitle.objects(user_id=self.user.pk).delete()
+        MClassifierText.objects(user_id=self.user.pk).delete()
+        MClassifierAuthor.objects(user_id=self.user.pk).delete()
+        MClassifierTag.objects(user_id=self.user.pk).delete()
+        MClassifierFeed.objects(user_id=self.user.pk).delete()
 
-        tokens = [
-            "Co-op",
-            "of",
-            "the",
-            "day",
-            "House",
-            "of",
-            "the",
-            "day",
-            "Condo",
-            "of",
-            "the",
-            "day",
-            "Development",
-            "Watch",
-            "Co-op",
-            "of",
-            "the",
-            "day",
-        ]
-        finder = nltk.collocations.TrigramCollocationFinder.from_words(tokens)
-
-        finder.apply_freq_filter(2)
-
-        # return the 10 n-grams with the highest PMI
-        print(finder.nbest(trigram_measures.pmi, 10))
-
-        titles = [
-            "Co-op of the day",
-            "Condo of the day",
-            "Co-op of the day",
-            "House of the day",
-            "Development Watch",
-            "Streetlevel",
-        ]
-
-        tokens = nltk.tokenize.word(" ".join(titles))
-        ngrams = nltk.ngrams(tokens, 4)
-        d = [key for key, group in groupby(sorted(ngrams)) if len(list(group)) >= 2]
-        print(d)
-
-
-class ClassifierTest(TestCase):
-    fixtures = ["classifiers.json", "brownstoner.json"]
-
-    def setUp(self):
-        self.client = Client()
-
-    #
-    # def test_filter(self):
-    #     user = User.objects.all()
-    #     feed = Feed.objects.all()
-    #
-    #     management.call_command('loaddata', 'brownstoner.json', verbosity=0)
-    #     response = self.client.get('/reader/refresh_feed', { "feed_id": 1, "force": True })
-    #     management.call_command('loaddata', 'brownstoner2.json', verbosity=0)
-    #     response = self.client.get('/reader/refresh_feed', { "feed_id": 1, "force": True })
-    #     management.call_command('loaddata', 'gothamist1.json', verbosity=0)
-    #     response = self.client.get('/reader/refresh_feed', { "feed_id": 4, "force": True })
-    #     management.call_command('loaddata', 'gothamist2.json', verbosity=0)
-    #     response = self.client.get('/reader/refresh_feed', { "feed_id": 4, "force": True })
-    #
-    #     stories = Story.objects.filter(story_feed=feed[1]).order_by('-story_date')[:100]
-    #
-    #     phrasefilter = PhraseFilter()
-    #     for story in stories:
-    #         # print story.story_title, story.id
-    #         phrasefilter.run(story.story_title, story.id)
-    #
-    #     phrasefilter.pare_phrases()
-    #     phrasefilter.print_phrases()
-    #
-    def test_train(self):
-        # user = User.objects.all()
-        # feed = Feed.objects.all()
-
-        management.call_command("loaddata", "brownstoner.json", verbosity=0, commit=False, skip_checks=False)
-        management.call_command(
-            "refresh_feed", force=1, feed=1, single_threaded=True, daemonize=False, skip_checks=False
+    def test_create_classifier_title(self):
+        classifier = MClassifierTitle.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            title="breaking news",
+            score=1,
+            creation_date=datetime.datetime.now(),
         )
-        management.call_command("loaddata", "brownstoner2.json", verbosity=0, commit=False, skip_checks=False)
-        management.call_command(
-            "refresh_feed", force=1, feed=1, single_threaded=True, daemonize=False, skip_checks=False
+        self.assertEqual(classifier.title, "breaking news")
+        self.assertEqual(classifier.score, 1)
+        self.assertEqual(classifier.user_id, self.user.pk)
+        self.assertEqual(classifier.feed_id, self.feed.pk)
+
+    def test_create_classifier_text(self):
+        classifier = MClassifierText.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            text="important announcement",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+        self.assertEqual(classifier.text, "important announcement")
+        self.assertEqual(classifier.score, 1)
+        self.assertEqual(classifier.user_id, self.user.pk)
+        self.assertEqual(classifier.feed_id, self.feed.pk)
+
+    def test_create_classifier_author(self):
+        classifier = MClassifierAuthor.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            author="John Doe",
+            score=-1,
+            creation_date=datetime.datetime.now(),
+        )
+        self.assertEqual(classifier.author, "John Doe")
+        self.assertEqual(classifier.score, -1)
+
+    def test_create_classifier_tag(self):
+        classifier = MClassifierTag.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            tag="technology",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+        self.assertEqual(classifier.tag, "technology")
+        self.assertEqual(classifier.score, 1)
+
+    def test_apply_classifier_titles(self):
+        MClassifierTitle.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            title="breaking",
+            score=1,
+            creation_date=datetime.datetime.now(),
         )
 
-        stories = MStory.objects(story_feed_id=1)[:53]
+        story = {"story_feed_id": self.feed.pk, "story_title": "Breaking News: Major Update"}
 
-        phrasefilter = PhraseFilter()
-        for story in stories:
-            # print story.story_title, story.id
-            phrasefilter.run(story.story_title, story.id)
+        classifiers = list(MClassifierTitle.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        score = apply_classifier_titles(classifiers, story)
 
-        phrasefilter.pare_phrases()
-        phrases = phrasefilter.get_phrases()
-        print(phrases)
+        self.assertEqual(score, 1)
 
-        tokenizer = Tokenizer(phrases)
-        classifier = Bayes(tokenizer)  # FisherClassifier(user[0], feed[0], phrases)
+    def test_apply_classifier_titles_no_match(self):
+        MClassifierTitle.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            title="sports",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
 
-        classifier.train("good", "House of the Day: 393 Pacific St.")
-        classifier.train("good", "House of the Day: 393 Pacific St.")
-        classifier.train("good", "Condo of the Day: 393 Pacific St.")
-        classifier.train("good", "Co-op of the Day: 393 Pacific St. #3")
-        classifier.train("good", "Co-op of the Day: 393 Pacific St. #3")
-        classifier.train("good", "Development Watch: 393 Pacific St. #3")
-        classifier.train("bad", "Development Watch: 393 Pacific St. #3")
-        classifier.train("bad", "Development Watch: 393 Pacific St. #3")
-        classifier.train("bad", "Development Watch: 393 Pacific St. #3")
-        classifier.train("bad", "Streetlevel: 393 Pacific St. #3")
+        story = {"story_feed_id": self.feed.pk, "story_title": "Technology News"}
 
-        guess = dict(classifier.guess("Co-op of the Day: 413 Atlantic"))
-        self.assertTrue(guess["good"] > 0.99)
-        self.assertTrue("bad" not in guess)
+        classifiers = list(MClassifierTitle.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        score = apply_classifier_titles(classifiers, story)
 
-        guess = dict(classifier.guess("House of the Day: 413 Atlantic"))
-        self.assertTrue(guess["good"] > 0.99)
-        self.assertTrue("bad" not in guess)
+        self.assertEqual(score, 0)
 
-        guess = dict(classifier.guess("Development Watch: Yatta"))
-        self.assertTrue(guess["bad"] > 0.7)
-        self.assertTrue(guess["good"] < 0.3)
+    def test_apply_classifier_texts(self):
+        MClassifierText.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            text="important announcement",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
 
-        guess = dict(classifier.guess("Development Watch: 393 Pacific St."))
-        self.assertTrue(guess["bad"] > 0.7)
-        self.assertTrue(guess["good"] < 0.3)
+        story = {
+            "story_feed_id": self.feed.pk,
+            "story_title": "News Update",
+            "story_content": "This is an important announcement about our new features.",
+        }
 
-        guess = dict(classifier.guess("Streetlevel: 123 Carlton St."))
-        self.assertTrue(guess["bad"] > 0.99)
-        self.assertTrue("good" not in guess)
+        classifiers = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        score = apply_classifier_texts(classifiers, story)
 
-        guess = classifier.guess("Extra, Extra")
-        self.assertTrue("bad" not in guess)
-        self.assertTrue("good" not in guess)
+        self.assertEqual(score, 1)
 
-        guess = classifier.guess("Nothing doing: 393 Pacific St.")
-        self.assertTrue("bad" not in guess)
-        self.assertTrue("good" not in guess)
+    def test_apply_classifier_texts_no_match(self):
+        MClassifierText.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            text="sports update",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        story = {
+            "story_feed_id": self.feed.pk,
+            "story_title": "Technology News",
+            "story_content": "New technology breakthrough announced today.",
+        }
+
+        classifiers = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        score = apply_classifier_texts(classifiers, story)
+
+        self.assertEqual(score, 0)
+
+    def test_apply_classifier_texts_no_content(self):
+        MClassifierText.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            text="important",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        story = {"story_feed_id": self.feed.pk, "story_title": "News"}
+
+        classifiers = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        score = apply_classifier_texts(classifiers, story)
+
+        self.assertEqual(score, 0)
+
+    def test_apply_classifier_texts_case_insensitive(self):
+        MClassifierText.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            text="IMPORTANT",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        story = {
+            "story_feed_id": self.feed.pk,
+            "story_title": "News",
+            "story_content": "This is an important message.",
+        }
+
+        classifiers = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        score = apply_classifier_texts(classifiers, story)
+
+        self.assertEqual(score, 1)
+
+    def test_apply_classifier_authors(self):
+        MClassifierAuthor.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            author="John Doe",
+            score=-1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        story = {"story_feed_id": self.feed.pk, "story_authors": "John Doe"}
+
+        classifiers = list(MClassifierAuthor.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        score = apply_classifier_authors(classifiers, story)
+
+        self.assertEqual(score, -1)
+
+    def test_apply_classifier_tags(self):
+        MClassifierTag.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            tag="technology",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        story = {"story_feed_id": self.feed.pk, "story_tags": ["technology", "news"]}
+
+        classifiers = list(MClassifierTag.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        score = apply_classifier_tags(classifiers, story)
+
+        self.assertEqual(score, 1)
+
+    def test_compute_story_score_with_title(self):
+        MClassifierTitle.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            title="important",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        story = {
+            "story_feed_id": self.feed.pk,
+            "story_title": "Important News",
+            "story_content": "Content here",
+            "story_authors": "",
+            "story_tags": [],
+        }
+
+        classifier_titles = list(MClassifierTitle.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_texts = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_authors = list(MClassifierAuthor.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_tags = list(MClassifierTag.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_feeds = list(MClassifierFeed.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+
+        score = compute_story_score(
+            story, classifier_titles, classifier_authors, classifier_tags, classifier_feeds, classifier_texts
+        )
+
+        self.assertEqual(score, 1)
+
+    def test_compute_story_score_with_text(self):
+        MClassifierText.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            text="exclusive content",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        story = {
+            "story_feed_id": self.feed.pk,
+            "story_title": "News Update",
+            "story_content": "This article contains exclusive content about the industry.",
+            "story_authors": "",
+            "story_tags": [],
+        }
+
+        classifier_titles = list(MClassifierTitle.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_texts = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_authors = list(MClassifierAuthor.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_tags = list(MClassifierTag.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_feeds = list(MClassifierFeed.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+
+        score = compute_story_score(
+            story, classifier_titles, classifier_authors, classifier_tags, classifier_feeds, classifier_texts
+        )
+
+        self.assertEqual(score, 1)
+
+    def test_compute_story_score_with_negative_author(self):
+        MClassifierAuthor.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            author="Bad Author",
+            score=-1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        story = {
+            "story_feed_id": self.feed.pk,
+            "story_title": "News",
+            "story_content": "Content",
+            "story_authors": "Bad Author",
+            "story_tags": [],
+        }
+
+        classifier_titles = list(MClassifierTitle.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_texts = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_authors = list(MClassifierAuthor.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_tags = list(MClassifierTag.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_feeds = list(MClassifierFeed.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+
+        score = compute_story_score(
+            story, classifier_titles, classifier_authors, classifier_tags, classifier_feeds, classifier_texts
+        )
+
+        self.assertEqual(score, -1)
+
+    def test_compute_story_score_text_beats_title(self):
+        # Both title and text match, should return text score since it's checked in same max/min logic
+        MClassifierTitle.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            title="news",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+        MClassifierText.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            text="breaking",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        story = {
+            "story_feed_id": self.feed.pk,
+            "story_title": "Breaking News Update",
+            "story_content": "This is breaking news content.",
+            "story_authors": "",
+            "story_tags": [],
+        }
+
+        classifier_titles = list(MClassifierTitle.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_texts = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_authors = list(MClassifierAuthor.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_tags = list(MClassifierTag.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        classifier_feeds = list(MClassifierFeed.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+
+        score = compute_story_score(
+            story, classifier_titles, classifier_authors, classifier_tags, classifier_feeds, classifier_texts
+        )
+
+        self.assertEqual(score, 1)
+
+    def test_get_classifiers_for_user(self):
+        # Make user Pro to enable text classifiers
+        self.user.profile.is_pro = True
+        self.user.profile.save()
+
+        MClassifierTitle.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            title="important",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+        MClassifierText.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            text="exclusive",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+        MClassifierAuthor.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            author="Good Author",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        classifiers = get_classifiers_for_user(self.user, feed_id=self.feed.pk)
+
+        self.assertIn("titles", classifiers)
+        self.assertIn("texts", classifiers)
+        self.assertIn("authors", classifiers)
+        self.assertIn("tags", classifiers)
+        self.assertIn("feeds", classifiers)
+
+        self.assertEqual(classifiers["titles"]["important"], 1)
+        self.assertEqual(classifiers["texts"]["exclusive"], 1)
+        self.assertEqual(classifiers["authors"]["Good Author"], 1)
+
+    def test_text_classifiers_premium_tiers(self):
+        # Create text classifier for testing
+        MClassifierText.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            text="exclusive",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+        MClassifierTitle.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            title="important",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        # Regular user should have text classifiers but they won't be applied to stories
+        self.user.profile.is_premium = False
+        self.user.profile.is_archive = False
+        self.user.profile.is_pro = False
+        self.user.profile.save()
+
+        classifiers = get_classifiers_for_user(self.user, feed_id=self.feed.pk)
+        self.assertEqual(len(classifiers["texts"]), 1)
+        self.assertEqual(classifiers["texts"]["exclusive"], 1)
+        self.assertEqual(len(classifiers["titles"]), 1)
+
+        # Regular premium user should have text classifiers but they won't be applied to stories
+        self.user.profile.is_premium = True
+        self.user.profile.is_archive = False
+        self.user.profile.is_pro = False
+        self.user.profile.save()
+
+        classifiers = get_classifiers_for_user(self.user, feed_id=self.feed.pk)
+        self.assertEqual(len(classifiers["texts"]), 1)
+        self.assertEqual(classifiers["texts"]["exclusive"], 1)
+        self.assertEqual(len(classifiers["titles"]), 1)
+
+        # Premium archive user should have text classifiers
+        self.user.profile.is_premium = True
+        self.user.profile.is_archive = True
+        self.user.profile.is_pro = False
+        self.user.profile.save()
+
+        classifiers = get_classifiers_for_user(self.user, feed_id=self.feed.pk)
+        self.assertEqual(len(classifiers["texts"]), 1)
+        self.assertEqual(classifiers["texts"]["exclusive"], 1)
+        self.assertEqual(len(classifiers["titles"]), 1)
+
+    def test_save_classifier_title_endpoint(self):
+        self.client.login(username="testuser", password="testpass")
+
+        response = self.client.post(
+            "/classifier/save/", {"feed_id": self.feed.pk, "like_title": ["important", "breaking"]}
+        )
+
+        content = json.decode(response.content)
+        self.assertEqual(content["code"], 0)
+
+        classifiers = list(MClassifierTitle.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        self.assertEqual(len(classifiers), 2)
+        self.assertEqual(classifiers[0].score, 1)
+
+    def test_save_classifier_text_endpoint(self):
+        self.client.login(username="testuser", password="testpass")
+
+        response = self.client.post(
+            "/classifier/save/",
+            {"feed_id": self.feed.pk, "like_text": ["exclusive content", "important announcement"]},
+        )
+
+        content = json.decode(response.content)
+        self.assertEqual(content["code"], 0)
+
+        classifiers = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        self.assertEqual(len(classifiers), 2)
+        self.assertEqual(classifiers[0].score, 1)
+
+    def test_save_classifier_dislike_text_endpoint(self):
+        self.client.login(username="testuser", password="testpass")
+
+        response = self.client.post(
+            "/classifier/save/", {"feed_id": self.feed.pk, "dislike_text": ["spam content"]}
+        )
+
+        content = json.decode(response.content)
+        self.assertEqual(content["code"], 0)
+
+        classifiers = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        self.assertEqual(len(classifiers), 1)
+        self.assertEqual(classifiers[0].score, -1)
+        self.assertEqual(classifiers[0].text, "spam content")
+
+    def test_save_classifier_remove_text_endpoint(self):
+        # First create a classifier
+        MClassifierText.objects.create(
+            user_id=self.user.pk,
+            feed_id=self.feed.pk,
+            social_user_id=0,
+            text="test content",
+            score=1,
+            creation_date=datetime.datetime.now(),
+        )
+
+        self.client.login(username="testuser", password="testpass")
+
+        # Remove it
+        response = self.client.post(
+            "/classifier/save/", {"feed_id": self.feed.pk, "remove_like_text": ["test content"]}
+        )
+
+        content = json.decode(response.content)
+        self.assertEqual(content["code"], 0)
+
+        classifiers = list(MClassifierText.objects(user_id=self.user.pk, feed_id=self.feed.pk))
+        self.assertEqual(len(classifiers), 0)
+
+    def test_save_classifier_marks_subscription_trained(self):
+        self.client.login(username="testuser", password="testpass")
+
+        usersub = UserSubscription.objects.get(user=self.user, feed=self.feed)
+        self.assertFalse(usersub.is_trained)
+
+        response = self.client.post(
+            "/classifier/save/", {"feed_id": self.feed.pk, "like_text": ["important"]}
+        )
+
+        content = json.decode(response.content)
+        self.assertEqual(content["code"], 0)
+
+        usersub.refresh_from_db()
+        self.assertTrue(usersub.is_trained)
+        self.assertTrue(usersub.needs_unread_recalc)
