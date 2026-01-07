@@ -112,8 +112,8 @@ services:
       - ./docker/volumes/elasticsearch:/usr/share/elasticsearch/data
       - ./config/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
 
-  db_mongo:
-    container_name: db_mongo
+  newsblur_db_mongo:
+    container_name: newsblur_db_mongo
     image: mongo:4.0
     restart: unless-stopped
     ports:
