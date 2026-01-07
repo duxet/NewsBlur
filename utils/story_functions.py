@@ -103,29 +103,33 @@ def _extract_date_tuples(date):
     return parsed_date, date_tuple, today_tuple, yesterday_tuple
 
 
-def pre_process_story(entry, encoding):
+def extract_story_date(entry):
     # Do not switch to published_parsed or every story will be dated the fetch time
     publish_date = entry.get("g_parsed") or entry.get("updated_parsed")
     if publish_date:
         publish_date = datetime.datetime(*publish_date[:6])
+
     if not publish_date and entry.get("published"):
         try:
             publish_date = dateutil.parser.parse(entry.get("published")).replace(tzinfo=None)
         except (ValueError, TypeError, OverflowError):
             pass
 
-    if publish_date:
-        entry["published"] = publish_date
-    else:
-        entry["published"] = datetime.datetime.utcnow() + datetime.timedelta(seconds=randint(0, 59))
+    if not publish_date:
+        publish_date = datetime.datetime.now() + datetime.timedelta(seconds=randint(0, 59))
 
-    if entry["published"] < datetime.datetime(2000, 1, 1):
-        entry["published"] = datetime.datetime.utcnow()
+    if publish_date < datetime.datetime(2000, 1, 1):
+        publish_date = datetime.datetime.now()
 
     # Future dated stories get forced to current date
-    # if entry['published'] > datetime.datetime.now() + datetime.timedelta(days=1):
-    if entry["published"] > datetime.datetime.now():
-        entry["published"] = datetime.datetime.now() + datetime.timedelta(seconds=randint(0, 59))
+    if publish_date > datetime.datetime.now():
+        publish_date = datetime.datetime.now() + datetime.timedelta(seconds=randint(0, 59))
+
+    return publish_date
+
+
+def pre_process_story(entry, encoding):
+    entry["published"] = extract_story_date(entry)
 
     # entry_link = entry.get('link') or ''
     # protocol_index = entry_link.find("://")
@@ -231,6 +235,46 @@ def strip_tags(html):
     if not html:
         return ""
     return strip_tags_django(html)
+
+
+def html_to_text(html_content):
+    """
+    Convert HTML content to plain text for AI processing.
+
+    Uses lxml's text_content() to extract text while preserving whitespace
+    between elements. Removes script, style, and other non-content elements.
+
+    Args:
+        html_content: HTML string to convert
+
+    Returns:
+        Cleaned plain text string
+    """
+    if not html_content:
+        return ""
+
+    try:
+        doc = lxml.html.fromstring(html_content)
+        # Remove elements that shouldn't be included in text
+        for element in doc.xpath("//script | //style | //noscript | //svg | //canvas | //iframe"):
+            element.getparent().remove(element)
+        # Extract text content - this preserves whitespace between elements
+        text = doc.text_content()
+    except (ParserError, XMLSyntaxError):
+        # If parsing fails, fall back to Django's strip_tags
+        text = strip_tags_django(html_content)
+
+    # Clean up excessive whitespace
+    # Replace multiple newlines with max 2
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    # Replace multiple spaces/tabs with single space
+    text = re.sub(r"[ \t]+", " ", text)
+    # Remove leading/trailing whitespace from lines
+    text = "\n".join(line.strip() for line in text.split("\n"))
+    # Remove leading/trailing whitespace from entire content
+    text = text.strip()
+
+    return text
 
 
 def strip_comments(html_string):

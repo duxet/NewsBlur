@@ -64,6 +64,10 @@ DOCKERBUILD = os.getenv("DOCKERBUILD")
 REDIS_USER = None
 FLASK_SENTRY_DSN = None
 
+# APNS settings for token-based authentication
+APNS_TEAM_ID = "YOUR_APNS_TEAM_ID"  # Apple Developer Team ID
+APNS_KEY_ID = "YOUR_APNS_KEY_ID"  # APNS Key ID from developer account
+
 # ===================
 # = Global Settings =
 # ===================
@@ -112,9 +116,18 @@ MAX_EMAILS_SENT_PER_DAY_PER_USER = 20  # Most are story notifications
 # = Django-specific Modules =
 # ===========================
 
+SHELL_PLUS_IMPORTS = [
+    "from apps.search.models import SearchFeed, SearchStory, DiscoverStory",
+    "import redis",
+    "import datetime",
+    "from pprint import pprint",
+    "import requests",
+    "import feedparser",
+]
+# SHELL_PLUS_PRINT_SQL = True
 
 MIDDLEWARE = (
-    "django_prometheus.middleware.PrometheusBeforeMiddleware",
+    "utils.prometheus_middleware.PrometheusBeforeMiddlewareWrapper",
     "django.middleware.gzip.GZipMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "subdomains.middleware.SubdomainMiddleware",
@@ -133,7 +146,7 @@ MIDDLEWARE = (
     "apps.profile.middleware.DBProfilerMiddleware",
     "apps.profile.middleware.SQLLogToConsoleMiddleware",
     "utils.redis_raw_log_middleware.RedisDumpMiddleware",
-    "django_prometheus.middleware.PrometheusAfterMiddleware",
+    "utils.prometheus_middleware.PrometheusAfterMiddlewareWrapper",
 )
 
 AUTHENTICATION_BACKENDS = (
@@ -150,10 +163,12 @@ OAUTH2_PROVIDER = {
         "read": "View new unread stories, saved stories, and shared stories.",
         "write": "Create new saved stories, shared stories, and subscriptions.",
         "ifttt": "Pair your NewsBlur account with other services.",
+        "email": "Access your email address for account identification.",
     },
     "CLIENT_ID_GENERATOR_CLASS": "oauth2_provider.generators.ClientIdGenerator",
     "ACCESS_TOKEN_EXPIRE_SECONDS": 60 * 60 * 24 * 365 * 10,  # 10 years
     "AUTHORIZATION_CODE_EXPIRE_SECONDS": 60 * 60,  # 1 hour
+    "PKCE_REQUIRED": False,  # Allow legacy OAuth clients that don't support PKCE (e.g., Unread, other third-party apps)
 }
 
 # ===========
@@ -164,7 +179,10 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "verbose": {"format": "[%(asctime)-12s] %(message)s", "datefmt": "%b %d %H:%M:%S"},
+        "verbose": {
+            "format": "[%(asctime)-12s] %(message)s",
+            "datefmt": "%b %d %H:%M:%S",
+        },
         "simple": {"format": "%(message)s"},
     },
     "handlers": {
@@ -172,8 +190,23 @@ LOGGING = {
             "level": "DEBUG",
             "class": "logging.NullHandler",
         },
-        "console": {"level": "DEBUG", "class": "logging.StreamHandler", "formatter": "verbose"},
-        "vendor.apns": {"level": "DEBUG", "class": "logging.StreamHandler", "formatter": "verbose"},
+        "console": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "vendor.apns": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "log_file": {
+            "level": "DEBUG",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOG_FILE,
+            "maxBytes": 16777216,  # 16megabytes
+            "formatter": "verbose",
+        },
         "mail_admins": {
             "level": "CRITICAL",
             "class": "django.utils.log.AdminEmailHandler",
@@ -328,6 +361,7 @@ INSTALLED_APPS = (
     "apps.oauth",
     "apps.search",
     "apps.categories",
+    "apps.ask_ai",
     "utils",  # missing models so no migrations
     "vendor",
     "typogrify",
@@ -360,6 +394,10 @@ CELERY_TASK_ROUTES = {
     "update-feeds": {"queue": "update_feeds", "binding_key": "update_feeds"},
     "beat-tasks": {"queue": "cron_queue", "binding_key": "cron_queue"},
     "search-indexer": {"queue": "search_indexer", "binding_key": "search_indexer"},
+    "discover-indexer": {
+        "queue": "discover_indexer",
+        "binding_key": "discover_indexer",
+    },
 }
 CELERY_TASK_QUEUES = {
     "work_queue": {
@@ -367,10 +405,26 @@ CELERY_TASK_QUEUES = {
         "exchange_type": "direct",
         "binding_key": "work_queue",
     },
-    "new_feeds": {"exchange": "new_feeds", "exchange_type": "direct", "binding_key": "new_feeds"},
-    "push_feeds": {"exchange": "push_feeds", "exchange_type": "direct", "binding_key": "push_feeds"},
-    "update_feeds": {"exchange": "update_feeds", "exchange_type": "direct", "binding_key": "update_feeds"},
-    "cron_queue": {"exchange": "cron_queue", "exchange_type": "direct", "binding_key": "cron_queue"},
+    "new_feeds": {
+        "exchange": "new_feeds",
+        "exchange_type": "direct",
+        "binding_key": "new_feeds",
+    },
+    "push_feeds": {
+        "exchange": "push_feeds",
+        "exchange_type": "direct",
+        "binding_key": "push_feeds",
+    },
+    "update_feeds": {
+        "exchange": "update_feeds",
+        "exchange_type": "direct",
+        "binding_key": "update_feeds",
+    },
+    "cron_queue": {
+        "exchange": "cron_queue",
+        "exchange_type": "direct",
+        "binding_key": "cron_queue",
+    },
     "beat_feeds_task": {
         "exchange": "beat_feeds_task",
         "exchange_type": "direct",
@@ -380,6 +434,16 @@ CELERY_TASK_QUEUES = {
         "exchange": "search_indexer",
         "exchange_type": "direct",
         "binding_key": "search_indexer",
+    },
+    "discover_indexer": {
+        "exchange": "discover_indexer",
+        "exchange_type": "direct",
+        "binding_key": "discover_indexer",
+    },
+    "ask_ai": {
+        "exchange": "ask_ai",
+        "exchange_type": "direct",
+        "binding_key": "ask_ai",
     },
 }
 CELERY_TASK_DEFAULT_QUEUE = "work_queue"
@@ -393,6 +457,7 @@ CELERY_IMPORTS = (
     "apps.feed_import.tasks",
     "apps.search.tasks",
     "apps.statistics.tasks",
+    "apps.ask_ai.tasks",
 )
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_TASK_ACKS_LATE = True  # Retry if task fails
@@ -457,18 +522,27 @@ CELERY_BEAT_SCHEDULE = {
 # =========
 # = Mongo =
 # =========
+
 if DOCKERBUILD:
     MONGO_PORT = 29019
 else:
     MONGO_PORT = 27017
 MONGO_DB = {
-    "host": f"db_mongo:{MONGO_PORT}",
+    "host": f"newsblur_db_mongo:{MONGO_PORT}",
     "name": "newsblur",
 }
 MONGO_ANALYTICS_DB = {
-    "host": f"db_mongo_analytics:{MONGO_PORT}",
+    "host": f"newsblur_db_mongo_analytics:{MONGO_PORT}",
     "name": "nbanalytics",
 }
+
+# =================
+# = Elasticsearch =
+# =================
+
+ELASTICSEARCH_FEED_HOST = "http://db-elasticsearch.service.nyc1.consul:9200"
+ELASTICSEARCH_STORY_HOST = "http://db-elasticsearch.service.nyc1.consul:9200"
+ELASTICSEARCH_DISCOVER_HOST = "http://db-elasticsearch-v8.service.nyc1.consul:9208"
 
 # ====================
 # = Database Routers =
@@ -508,6 +582,8 @@ FACEBOOK_NAMESPACE = "newsblur"
 TWITTER_CONSUMER_KEY = "ooooooooooooooooooooo"
 TWITTER_CONSUMER_SECRET = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 YOUTUBE_API_KEY = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+SCRAPENINJA_API_KEY = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+SCRAPINGBEE_API_KEY = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
 # ===============
 # = AWS Backing =
@@ -587,6 +663,8 @@ AWS_SECRET_ACCESS_KEY = S3_SECRET
 os.environ["AWS_ACCESS_KEY_ID"] = AWS_ACCESS_KEY_ID
 os.environ["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
 
+os.environ["HF_HOME"] = "/srv/newsblur/docker/volumes/discover"
+
 
 def clear_prometheus_aggregation_stats():
     prom_folder = "/tmp/.prom_cache"
@@ -665,7 +743,7 @@ ANYMAIL = {
 
 MONGO_DB_DEFAULTS = {
     "name": "newsblur",
-    "host": f"db_mongo:{MONGO_PORT}",
+    "host": f"newsblur_db_mongo:{MONGO_PORT}",
     "alias": "default",
     "unicode_decode_error_handler": "ignore",
     "connect": False,
@@ -677,14 +755,23 @@ MONGODB = connect(MONGO_DB_NAME, **MONGO_DB)
 
 MONGO_ANALYTICS_DB_DEFAULTS = {
     "name": "nbanalytics",
-    "host": f"db_mongo_analytics:{MONGO_PORT}",
+    "host": f"newsblur_db_mongo_analytics:{MONGO_PORT}",
     "alias": "nbanalytics",
 }
 MONGO_ANALYTICS_DB = dict(MONGO_ANALYTICS_DB_DEFAULTS, **MONGO_ANALYTICS_DB)
 
-MONGOANALYTICSDB = connect(
-    db=MONGO_ANALYTICS_DB["name"], host=MONGO_ANALYTICS_DB['host'], alias="nbanalytics"
-)
+if "username" in MONGO_ANALYTICS_DB:
+    MONGOANALYTICSDB = connect(
+        db=MONGO_ANALYTICS_DB["name"],
+        host=f"mongodb://{MONGO_ANALYTICS_DB['username']}:{MONGO_ANALYTICS_DB['password']}@{MONGO_ANALYTICS_DB['host']}/?authSource=admin",
+        alias="nbanalytics",
+    )
+else:
+    MONGOANALYTICSDB = connect(
+        db=MONGO_ANALYTICS_DB["name"],
+        host=f"mongodb://{MONGO_ANALYTICS_DB['host']}/",
+        alias="nbanalytics",
+    )
 
 
 # =========
@@ -708,9 +795,18 @@ if REDIS_USER is None:
 
 CELERY_REDIS_DB_NUM = 4
 SESSION_REDIS_DB = 5
-CELERY_BROKER_URL = "redis://%s:%s/%s" % (REDIS_USER["host"], REDIS_USER_PORT, CELERY_REDIS_DB_NUM)
+CELERY_BROKER_URL = "redis://%s:%s/%s" % (
+    REDIS_USER["host"],
+    REDIS_USER_PORT,
+    CELERY_REDIS_DB_NUM,
+)
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
-BROKER_TRANSPORT_OPTIONS = {"max_retries": 3, "interval_start": 0, "interval_step": 0.2, "interval_max": 0.5}
+BROKER_TRANSPORT_OPTIONS = {
+    "max_retries": 3,
+    "interval_start": 0,
+    "interval_step": 0.2,
+    "interval_max": 0.5,
+}
 
 SESSION_REDIS = {
     "host": REDIS_SESSIONS["host"],

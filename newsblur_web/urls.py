@@ -14,6 +14,7 @@ admin.autodiscover()
 urlpatterns = [
     url(r"^$", reader_views.index, name="index"),
     url(r"^reader/", include("apps.reader.urls")),
+    url(r"^ask-ai/", include("apps.ask_ai.urls")),
     url(r"^add/?", reader_views.index),
     url(r"^try/?", reader_views.index),
     url(r"^site/(?P<feed_id>\d+)?", reader_views.index),
@@ -84,6 +85,7 @@ urlpatterns = [
     url(r"^account/ifttt/v1/", include("apps.oauth.urls")),
     url(r"^account/", include("oauth2_provider.urls", namespace="oauth2_provider")),
     url(r"^monitor/", include("apps.monitor.urls"), name="monitor"),
+    url(r"^health-check/?", static_views.health_check, name="health-check"),
     url("", include("django_prometheus.urls")),
 ]
 

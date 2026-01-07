@@ -29,10 +29,6 @@ class FeedDetailViewController: FeedDetailObjCViewController {
         case loading
     }
     
-    var isGrid: Bool {
-        return appDelegate.detailViewController.layout == .grid
-    }
-    
     var wasGrid: Bool {
         return appDelegate.detailViewController.wasGrid
     }
@@ -97,6 +93,20 @@ class FeedDetailViewController: FeedDetailObjCViewController {
         changedLayout()
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        if view.frame.origin.y == 0, let navigationController, navigationController.navigationBar.frame.origin.y < 0 {
+            print("FeedDetailViewController: viewWillAppear in the wrong place: frame: \(view.frame), nav frame: \(navigationController.navigationBar.frame); this is a bug that started with iOS 18; working around it")
+            
+            view.frame.origin.y = -navigationController.navigationBar.frame.origin.y
+            
+            view.setNeedsUpdateConstraints()
+            view.setNeedsLayout()
+            view.setNeedsDisplay()
+        }
+    }
+    
     @objc override func loadingFeed() {
         // Make sure the view has loaded.
         _ = view
@@ -138,7 +148,15 @@ class FeedDetailViewController: FeedDetailObjCViewController {
     
     @objc var suppressMarkAsRead = false
     
+    var scrollingDate = Date.distantPast
+    
     func deferredReload(story: Story? = nil) {
+        if let story {
+            print("🪿 queuing deferred reload for \(story)")
+        } else {
+            print("🪿 queuing deferred reload")
+        }
+        
         reloadWorkItem?.cancel()
         
         if let story {
@@ -153,6 +171,16 @@ class FeedDetailViewController: FeedDetailObjCViewController {
             }
             
             if pendingStories.isEmpty {
+                print("🪿 starting deferred reload")
+                
+                let secondsSinceScroll = -scrollingDate.timeIntervalSinceNow
+                
+                if secondsSinceScroll < 0.5 {
+                    print("🪿 too soon to reload; \(secondsSinceScroll) seconds since scroll")
+                    deferredReload(story: story)
+                    return
+                }
+                
                 configureDataSource()
             } else {
                 for story in pendingStories.values {
@@ -183,7 +211,7 @@ class FeedDetailViewController: FeedDetailObjCViewController {
     @objc override func reload(_ indexPath: IndexPath, with rowAnimation: UITableView.RowAnimation = .none) {
         if !isLegacyTable {
             deferredReload()
-        } else if reloadWorkItem == nil, storyTitlesTable.window != nil {
+        } else if reloadWorkItem == nil, storyTitlesTable.window != nil, swipingStoryHash == nil {
             // Only do this if a deferred reload isn't pending; otherwise no point in doing a partial reload, plus the table may be stale.
             storyTitlesTable.reloadRows(at: [indexPath], with: rowAnimation)
         }
@@ -202,6 +230,55 @@ extension FeedDetailViewController {
             reloadTable()
         }
     }
+    
+#if targetEnvironment(macCatalyst)
+    override func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        let location = storyLocation(for: indexPath)
+        
+        guard location < storiesCollection.storyLocationsCount else {
+            return nil
+        }
+        
+        let storyIndex = storiesCollection.index(fromLocation: location)
+        let story = Story(index: storyIndex)
+        
+        appDelegate.activeStory = story.dictionary
+        
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { suggestedActions in
+            let read = UIAction(title: story.isRead ? "Mark as unread" : "Mark as read", image: Utilities.imageNamed("mark-read", sized: 14)) { action in
+                self.appDelegate.storiesCollection.toggleStoryUnread(story.dictionary)
+                self.reload()
+            }
+            
+            let newer = UIAction(title: "Mark newer stories read", image: Utilities.imageNamed("mark-read", sized: 14)) { action in
+                self.markFeedsRead(fromTimestamp: story.timestamp, andOlder: false)
+                self.reload()
+            }
+            
+            let older = UIAction(title: "Mark older stories read", image: Utilities.imageNamed("mark-read", sized: 14)) { action in
+                self.markFeedsRead(fromTimestamp: story.timestamp, andOlder: true)
+                self.reload()
+            }
+            
+            let saved = UIAction(title: story.isSaved ? "Unsave this story" : "Save this story", image: Utilities.imageNamed("saved-stories", sized: 14)) { action in
+                self.appDelegate.storiesCollection.toggleStorySaved(story.dictionary)
+                self.reload()
+            }
+            
+            let send = UIAction(title: "Send this story to…", image: Utilities.imageNamed("email", sized: 14)) { action in
+                self.appDelegate.showSend(to: self, sender: self.view)
+            }
+            
+            let train = UIAction(title: "Train this story", image: Utilities.imageNamed("train", sized:    14)) { action in
+                self.appDelegate.openTrainStory(self.view)
+            }
+            
+            let submenu = UIMenu(title: "", options: .displayInline, children: [saved, send, train])
+            
+            return UIMenu(title: "", children: [read, newer, older, submenu])
+        }
+    }
+#endif
 }
 
 extension FeedDetailViewController: FeedDetailInteraction {
@@ -232,12 +309,18 @@ extension FeedDetailViewController: FeedDetailInteraction {
         let cacheCount = storyCache.before.count + storyCache.after.count
         
         if cacheCount > 0, story.index >= cacheCount - 5 {
+            let debug = Date()
+            
             if storiesCollection.isRiverView, storiesCollection.activeFolder != nil {
                 fetchRiverPage(storiesCollection.feedPage + 1, withCallback: nil)
             } else {
                 fetchFeedDetail(storiesCollection.feedPage + 1, withCallback: nil)
             }
+            
+            print("🐓 Fetching next page took \(-debug.timeIntervalSinceNow) seconds")
         }
+        
+        scrollingDate = Date()
     }
     
     func tapped(story: Story) {
@@ -294,8 +377,12 @@ extension FeedDetailViewController: FeedDetailInteraction {
     
     func hid(story: Story) {
         print("🪿 Hiding \(story.debugTitle)")
-        
+
         appDelegate.activeStory = nil
         reload()
+    }
+
+    func openPremiumDialog() {
+        appDelegate.showPremiumDialog()
     }
 }

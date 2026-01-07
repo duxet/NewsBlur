@@ -1,7 +1,42 @@
+// VS Code workspace settings for NewsBlur
 {
+    // Reduce Pylance strictness to avoid many false positives in dynamic Django code
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.useLibraryCodeForTypes": true,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.languageServer": "Pylance",
+    // Disable specific Pylance/pyright diagnostics that are noisy in this codebase
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportArgumentType": "none"
+    },
+    // Help Pylance resolve imports by adding project paths
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}",
+        "${workspaceFolder}/apps",
+        "${workspaceFolder}/api",
+        "${workspaceFolder}/archive",
+        "${workspaceFolder}/utils"
+    ],
+    // Default interpreter — adjust to your virtualenv or container Python executable
+    "python.defaultInterpreterPath": "/usr/bin/python3",
+    "black-formatter.args": [
+        "--line-length",
+        "110"
+    ],
     "isort.args": [
         "--profile",
         "black"
+    ],
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+    },
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": false,
+    "python.linting.pylamaEnabled": false,
+    "python.linting.flake8Args": [
+        "--ignore=E501,W293,W503,W504,E302,E722,E226,E221,E402,E401"
     ],
     // "python.linting.enabled": true,
     // "python.linting.pylintEnabled": false,
@@ -39,4 +74,16 @@
         "*.yml": "ansible"
     },
     "ansible.python.interpreterPath": "/opt/homebrew/bin/python3",
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "python.formatting.provider": "none",
+    "cSpell.words": [
+        "NEWSBLUR"
+    ],
+    "idf.pythonInstallPath": "/usr/local/bin/python",
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    }
 }

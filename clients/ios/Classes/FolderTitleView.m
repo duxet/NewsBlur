@@ -37,7 +37,7 @@
         [subview removeFromSuperview];
     }
     
-    [UIColorFromRGB(0xF7F8F5) set];
+    [UIColorFromLightSepiaMediumDarkRGB(0xF7F8F5, 0xF3E2CB, 0x48484A, 0x38383A) set];
     CGContextFillRect(context, rect);
     
     NSString *folderName = appDelegate.dictFoldersArray[section];
@@ -101,8 +101,8 @@
     UIView* customView = [[UIView alloc] initWithFrame:rect];
     
     // Folder title
-    UIColor *backgroundColor = UIColorFromRGB(0xEAECE6);
-    UIColor *textColor = UIColorFromRGB(0x4C4D4A);
+    UIColor *backgroundColor = UIColorFromLightSepiaMediumDarkRGB(0xEAECE6, 0xEBDDCC, 0x3A3A3C, 0x2C2C2E);
+    UIColor *textColor = UIColorFromLightSepiaMediumDarkRGB(0x4C4D4A, 0x5C4A3D, 0xE0E0E0, 0xE8E8E8);
     UIFontDescriptor *boldFontDescriptor = [self fontDescriptorUsingPreferredSize:UIFontTextStyleCaption1];
     UIFont *font = [UIFont fontWithName:@"WhitneySSm-Medium" size:boldFontDescriptor.pointSize];
     NSInteger titleOffsetY = ((rect.size.height - font.pointSize) / 2) - 1;
@@ -125,13 +125,13 @@
         folderTitle = @"Saved Searches";
     } else {
         folderTitle = folderDisplayName;
-        backgroundColor = UIColorFromRGB(0xF7F8F5);
+        backgroundColor = UIColorFromLightSepiaMediumDarkRGB(0xF0F2ED, 0xF3E2CB, 0x414143, 0x323234);
     }
-    
+
     [backgroundColor set];
     CGContextFillRect(context, rect);
-    
-    UIColor *shadowColor = UIColorFromRGB(0xF0F2E9);
+
+    UIColor *shadowColor = UIColorFromLightSepiaMediumDarkRGB(0xF0F2E9, 0xEBDDCC, 0x2C2C2E, 0x1C1C1E);
     CGContextSetShadowWithColor(context, CGSizeMake(0, 1), 0, [shadowColor CGColor]);
 
     NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle defaultParagraphStyle] mutableCopy];
@@ -213,7 +213,7 @@
     
     if (section == NewsBlurTopSectionInfrequentSiteStories) {
         folderImage = [UIImage imageNamed:@"ak-icon-infrequent.png"];
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!appDelegate.isPhone) {
             folderImageViewX = 10;
         } else {
             folderImageViewX = 7;
@@ -221,7 +221,7 @@
         allowLongPress = YES;
     } else if (section == NewsBlurTopSectionAllStories) {
         folderImage = [UIImage imageNamed:@"all-stories"];
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!appDelegate.isPhone) {
             folderImageViewX = 10;
         } else {
             folderImageViewX = 7;
@@ -229,42 +229,42 @@
         allowLongPress = NO;
     } else if ([folderName isEqual:@"river_global"]) {
         folderImage = [UIImage imageNamed:@"global-shares"];
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!appDelegate.isPhone) {
             folderImageViewX = 10;
         } else {
             folderImageViewX = 8;
         }
     } else if ([folderName isEqual:@"river_blurblogs"]) {
         folderImage = [UIImage imageNamed:@"all-shares"];
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!appDelegate.isPhone) {
             folderImageViewX = 10;
         } else {
             folderImageViewX = 8;
         }
     } else if ([folderName isEqual:@"saved_searches"]) {
         folderImage = [UIImage imageNamed:@"search"];
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!appDelegate.isPhone) {
             folderImageViewX = 10;
         } else {
             folderImageViewX = 7;
         }
     } else if ([folderName isEqual:@"saved_stories"]) {
         folderImage = [UIImage imageNamed:@"saved-stories"];
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!appDelegate.isPhone) {
             folderImageViewX = 10;
         } else {
             folderImageViewX = 7;
         }
     } else if ([folderName isEqual:@"read_stories"]) {
         folderImage = [UIImage imageNamed:@"indicator-unread"];
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!appDelegate.isPhone) {
             folderImageViewX = 10;
         } else {
             folderImageViewX = 7;
         }
     } else if ([folderName isEqual:@"widget_stories"]) {
         folderImage = [UIImage imageNamed:@"g_icn_folder_widget.png"];
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!appDelegate.isPhone) {
             folderImageViewX = 10;
         } else {
             folderImageViewX = 7;
@@ -275,7 +275,7 @@
         } else {
             folderImage = [UIImage imageNamed:@"folder-open"];
         }
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        if (!appDelegate.isPhone) {
         } else {
             folderImageViewX = 7;
         }

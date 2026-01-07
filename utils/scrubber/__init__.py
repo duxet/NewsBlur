@@ -172,6 +172,17 @@ class Scrubber(object):
             "blink",
             "body",
             "html",
+            # HTML5 semantic tags - strip the tags but keep their content
+            # utils/scrubber/__init__.py
+            "header",
+            "main",
+            "footer",
+            "section",
+            "article",
+            "nav",
+            "aside",
+            "figure",
+            "figcaption",
         )
     )
     allowed_attributes = set(
@@ -184,6 +195,7 @@ class Scrubber(object):
             "dir",
             "height",
             "href",
+            "id",
             "src",
             "style",
             "title",
@@ -297,7 +309,7 @@ class Scrubber(object):
 
     def _clean_path(self, node, attrname):
         url = node.get(attrname)
-        if url and "://" not in url and not url.startswith("mailto:"):
+        if url and "://" not in url and not url.startswith("mailto:") and not url.startswith("#"):
             print(url)
             if url[0] not in ("/", ".") and not self.base_url:
                 node[attrname] = "http://" + url

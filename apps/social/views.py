@@ -23,10 +23,12 @@ from apps.analyzer.models import (
     MClassifierAuthor,
     MClassifierFeed,
     MClassifierTag,
+    MClassifierText,
     MClassifierTitle,
     apply_classifier_authors,
     apply_classifier_feeds,
     apply_classifier_tags,
+    apply_classifier_texts,
     apply_classifier_titles,
     get_classifiers_for_user,
     sort_classifiers_by_feed,
@@ -64,6 +66,22 @@ from utils.user_functions import ajax_login_required, get_user
 from utils.view_functions import is_true, render_to, required_params
 from vendor.timezones.utilities import localtime_for_timezone
 
+# Pattern to match invalid XML 1.0 control characters
+# Valid: \x09 (tab), \x0A (newline), \x0D (carriage return)
+# Invalid: \x00-\x08, \x0B-\x0C, \x0E-\x1F, \x7F-\x9F
+INVALID_XML_CHARS = re.compile(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]")
+
+
+def sanitize_for_xml(text):
+    """
+    Remove control characters that are invalid in XML 1.0.
+    XML 1.0 allows: tab (0x09), newline (0x0A), carriage return (0x0D),
+    and characters >= 0x20 (except 0x7F-0x9F range).
+    """
+    if not text:
+        return text
+    return INVALID_XML_CHARS.sub("", text)
+
 
 @json.json_view
 def load_social_stories(request, user_id, username=None):
@@ -75,6 +93,13 @@ def load_social_stories(request, user_id, username=None):
     page = int(request.GET.get("page", 1))
     order = request.GET.get("order", "newest")
     read_filter = request.GET.get("read_filter", "all")
+    date_filter_start = request.GET.get("date_filter_start")
+    date_filter_end = request.GET.get("date_filter_end")
+    # Sanitize date filters - JS sends "null" as a string
+    if date_filter_start in ("null", "None", "", None):
+        date_filter_start = None
+    if date_filter_end in ("null", "None", "", None):
+        date_filter_end = None
     query = request.GET.get("query", "").strip()
     include_story_content = is_true(request.GET.get("include_story_content", True))
     stories = []
@@ -83,6 +108,29 @@ def load_social_stories(request, user_id, username=None):
     if page:
         offset = limit * (int(page) - 1)
     now = localtime_for_timezone(datetime.datetime.now(), user.profile.timezone)
+
+    # Normalize date filters from user timezone to UTC
+    from apps.reader.views import (
+        adjust_read_filter_for_date_range,
+        normalize_date_filters,
+    )
+    from utils import log as logging_util
+
+    date_filter_start_utc, date_filter_end_utc, date_filter_end_start_utc = normalize_date_filters(
+        date_filter_start, date_filter_end, user.profile.timezone
+    )
+
+    # Auto-switch from unread to all if date filter extends beyond unread cutoff
+    read_filter = adjust_read_filter_for_date_range(
+        read_filter, date_filter_start_utc, date_filter_end_start_utc, user.profile.unread_cutoff
+    )
+
+    if date_filter_start or date_filter_end:
+        logging_util.user(
+            request,
+            "~FBDate filters for social stories: start=%s end=%s (UTC: start=%s end=%s)"
+            % (date_filter_start, date_filter_end, date_filter_start_utc, date_filter_end_utc),
+        )
 
     social_profile = MSocialProfile.get_user(social_user.pk)
     try:
@@ -104,7 +152,13 @@ def load_social_stories(request, user_id, username=None):
     elif socialsub and (read_filter == "unread" or order == "oldest"):
         cutoff_date = max(socialsub.mark_read_date, user.profile.unread_cutoff)
         story_hashes = socialsub.get_stories(
-            order=order, read_filter=read_filter, offset=offset, limit=limit, cutoff_date=cutoff_date
+            order=order,
+            read_filter=read_filter,
+            offset=offset,
+            limit=limit,
+            cutoff_date=cutoff_date,
+            date_filter_start=date_filter_start_utc,
+            date_filter_end=date_filter_end_utc,
         )
         story_date_order = "%sshared_date" % ("" if order == "oldest" else "-")
         if story_hashes:
@@ -115,9 +169,12 @@ def load_social_stories(request, user_id, username=None):
                 story.extract_image_urls()
             stories = Feed.format_stories(mstories)
     else:
-        mstories = MSharedStory.objects(user_id=social_user.pk).order_by("-shared_date")[
-            offset : offset + limit
-        ]
+        mstories_query = MSharedStory.objects(user_id=social_user.pk)
+        if date_filter_start_utc:
+            mstories_query = mstories_query.filter(shared_date__gte=date_filter_start_utc)
+        if date_filter_end_utc:
+            mstories_query = mstories_query.filter(shared_date__lt=date_filter_end_utc)
+        mstories = mstories_query.order_by("-shared_date")[offset : offset + limit]
         for story in mstories:
             story.extract_image_urls()
         stories = Feed.format_stories(mstories)
@@ -142,6 +199,7 @@ def load_social_stories(request, user_id, username=None):
     classifier_authors = list(MClassifierAuthor.objects(user_id=user.pk, social_user_id=social_user_id))
     classifier_titles = list(MClassifierTitle.objects(user_id=user.pk, social_user_id=social_user_id))
     classifier_tags = list(MClassifierTag.objects(user_id=user.pk, social_user_id=social_user_id))
+    classifier_texts = list(MClassifierText.objects(user_id=user.pk, social_user_id=social_user_id))
     # Merge with feed specific classifiers
     classifier_feeds = classifier_feeds + list(
         MClassifierFeed.objects(user_id=user.pk, feed_id__in=story_feed_ids)
@@ -154,6 +212,9 @@ def load_social_stories(request, user_id, username=None):
     )
     classifier_tags = classifier_tags + list(
         MClassifierTag.objects(user_id=user.pk, feed_id__in=story_feed_ids)
+    )
+    classifier_texts = classifier_texts + list(
+        MClassifierText.objects(user_id=user.pk, feed_id__in=story_feed_ids)
     )
 
     unread_story_hashes = []
@@ -220,6 +281,11 @@ def load_social_stories(request, user_id, username=None):
             "author": apply_classifier_authors(classifier_authors, story),
             "tags": apply_classifier_tags(classifier_tags, story),
             "title": apply_classifier_titles(classifier_titles, story),
+            "text": (
+                apply_classifier_texts(classifier_texts, story)
+                if user.profile.premium_available_text_classifiers
+                else 0
+            ),
         }
 
     classifiers = sort_classifiers_by_feed(
@@ -229,6 +295,7 @@ def load_social_stories(request, user_id, username=None):
         classifier_authors=classifier_authors,
         classifier_titles=classifier_titles,
         classifier_tags=classifier_tags,
+        classifier_texts=classifier_texts,
     )
     if socialsub:
         socialsub.feed_opens += 1
@@ -252,15 +319,28 @@ def load_social_stories(request, user_id, username=None):
 
 @json.json_view
 def load_river_blurblog(request):
-    limit = int(request.GET.get("limit", 10))
+    try:
+        limit = int(request.GET.get("limit", 10))
+    except (ValueError, TypeError):
+        limit = 10
     start = time.time()
     user = get_user(request)
     social_user_ids = request.GET.getlist("social_user_ids") or request.GET.getlist("social_user_ids[]")
     social_user_ids = [int(uid) for uid in social_user_ids if uid]
     original_user_ids = list(social_user_ids)
-    page = int(request.GET.get("page", 1))
+    try:
+        page = int(request.GET.get("page", 1))
+    except (ValueError, TypeError):
+        page = 1
     order = request.GET.get("order", "newest")
     read_filter = request.GET.get("read_filter", "unread")
+    date_filter_start = request.GET.get("date_filter_start")
+    date_filter_end = request.GET.get("date_filter_end")
+    # Sanitize date filters - JS sends "null" as a string
+    if date_filter_start in ("null", "None", "", None):
+        date_filter_start = None
+    if date_filter_end in ("null", "None", "", None):
+        date_filter_end = None
     relative_user_id = request.GET.get("relative_user_id", None)
     global_feed = request.GET.get("global_feed", None)
     on_dashboard = is_true(request.GET.get("dashboard", False))
@@ -283,6 +363,21 @@ def load_river_blurblog(request):
     offset = (page - 1) * limit
     limit = page * limit - 1
 
+    # Normalize date filters from user timezone to UTC
+    from apps.reader.views import (
+        adjust_read_filter_for_date_range,
+        normalize_date_filters,
+    )
+
+    date_filter_start_utc, date_filter_end_utc, date_filter_end_start_utc = normalize_date_filters(
+        date_filter_start, date_filter_end, user.profile.timezone
+    )
+
+    # Auto-switch from unread to all if date filter extends beyond unread cutoff
+    read_filter = adjust_read_filter_for_date_range(
+        read_filter, date_filter_start_utc, date_filter_end_start_utc, user.profile.unread_cutoff
+    )
+
     story_hashes, story_dates, unread_feed_story_hashes = MSocialSubscription.feed_stories(
         user.pk,
         social_user_ids,
@@ -293,6 +388,8 @@ def load_river_blurblog(request):
         relative_user_id=relative_user_id,
         socialsubs=socialsubs,
         cutoff_date=user.profile.unread_cutoff,
+        date_filter_start=date_filter_start_utc,
+        date_filter_end=date_filter_end_utc,
         dashboard_global=on_dashboard and global_feed,
     )
     mstories = MStory.find_by_story_hashes(story_hashes)
@@ -352,11 +449,13 @@ def load_river_blurblog(request):
         classifier_authors = list(MClassifierAuthor.objects(user_id=user.pk, feed_id__in=story_feed_ids))
         classifier_titles = list(MClassifierTitle.objects(user_id=user.pk, feed_id__in=story_feed_ids))
         classifier_tags = list(MClassifierTag.objects(user_id=user.pk, feed_id__in=story_feed_ids))
+        classifier_texts = list(MClassifierText.objects(user_id=user.pk, feed_id__in=story_feed_ids))
     else:
         classifier_feeds = []
         classifier_authors = []
         classifier_titles = []
         classifier_tags = []
+        classifier_texts = []
 
     # Just need to format stories
     nowtz = localtime_for_timezone(now, user.profile.timezone)
@@ -381,6 +480,11 @@ def load_river_blurblog(request):
             "author": apply_classifier_authors(classifier_authors, story),
             "tags": apply_classifier_tags(classifier_tags, story),
             "title": apply_classifier_titles(classifier_titles, story),
+            "text": (
+                apply_classifier_texts(classifier_texts, story)
+                if user.profile.premium_available_text_classifiers
+                else 0
+            ),
         }
         if story["story_hash"] in shared_stories:
             story["shared"] = True
@@ -402,6 +506,7 @@ def load_river_blurblog(request):
         classifier_authors=classifier_authors,
         classifier_titles=classifier_titles,
         classifier_tags=classifier_tags,
+        classifier_texts=classifier_texts,
     )
 
     diff = time.time() - start
@@ -443,6 +548,13 @@ def load_social_page(request, user_id, username=None, **kwargs):
     format = request.GET.get("format", None)
     has_next_page = False
     feed_id = kwargs.get("feed_id") or request.GET.get("feed_id")
+    date_filter_start = request.GET.get("date_filter_start")
+    date_filter_end = request.GET.get("date_filter_end")
+    # Sanitize date filters - JS sends "null" as a string
+    if date_filter_start in ("null", "None", "", None):
+        date_filter_start = None
+    if date_filter_end in ("null", "None", "", None):
+        date_filter_end = None
     if page:
         offset = limit * (page - 1)
     social_services = None
@@ -466,6 +578,21 @@ def load_social_page(request, user_id, username=None, **kwargs):
         current_tab = "global"
         global_feed = True
 
+    # Normalize date filters from user timezone to UTC
+    from apps.reader.views import normalize_date_filters
+    from utils import log as logging_util
+
+    date_filter_start_utc, date_filter_end_utc, date_filter_end_start_utc = normalize_date_filters(
+        date_filter_start, date_filter_end, user.profile.timezone
+    )
+
+    if date_filter_start or date_filter_end:
+        logging_util.user(
+            request,
+            "~FBDate filters for social stories: start=%s end=%s (UTC: start=%s end=%s)"
+            % (date_filter_start, date_filter_end, date_filter_start_utc, date_filter_end_utc),
+        )
+
     if social_profile.private and (
         not user.is_authenticated or not social_profile.is_followed_by_user(user.pk)
     ):
@@ -482,6 +609,8 @@ def load_social_page(request, user_id, username=None, **kwargs):
             relative_user_id=relative_user_id,
             cache=request.user.is_authenticated,
             cutoff_date=user.profile.unread_cutoff,
+            date_filter_start=date_filter_start_utc,
+            date_filter_end=date_filter_end_utc,
         )
         if len(story_ids) > limit:
             has_next_page = True
@@ -502,7 +631,14 @@ def load_social_page(request, user_id, username=None, **kwargs):
             params["story_feed_id"] = feed_id
         if "story_db_id" in params:
             params.pop("story_db_id")
-        mstories = MSharedStory.objects(**params).order_by("-shared_date")[offset : offset + limit + 1]
+
+        mstories_query = MSharedStory.objects(**params)
+        if date_filter_start_utc:
+            mstories_query = mstories_query.filter(shared_date__gte=date_filter_start_utc)
+        if date_filter_end_utc:
+            mstories_query = mstories_query.filter(shared_date__lt=date_filter_end_utc)
+
+        mstories = mstories_query.order_by("-shared_date")[offset : offset + limit + 1]
         stories = Feed.format_stories(mstories, include_permalinks=True)
 
         if len(stories) > limit:
@@ -697,8 +833,11 @@ def mark_story_as_shared(request):
             },
         )
 
-    quota = 100
-    if not request.user.profile.is_premium:
+    if request.user.profile.is_archive:
+        quota = 150
+    elif request.user.profile.is_premium:
+        quota = 50
+    else:
         quota = 3
     if MSharedStory.feed_quota(request.user.pk, story.story_hash, quota=quota):
         logging.user(
@@ -1108,7 +1247,10 @@ def shared_stories_public(request, username):
 @json.json_view
 def profile(request):
     user = get_user(request.user)
-    user_id = int(request.GET.get("user_id", user.pk))
+    try:
+        user_id = int(request.GET.get("user_id", user.pk))
+    except (ValueError, TypeError):
+        return json.json_response(request, {"code": -1, "message": "Invalid user_id parameter."})
     categories = request.GET.getlist("category") or request.GET.getlist("category[]")
     include_activities_html = request.GET.get("include_activities_html", None)
 
@@ -1617,13 +1759,13 @@ def shared_stories_rss_feed(request, user_id, username=None):
         return HttpResponseForbidden()
 
     data = {}
-    data["title"] = social_profile.title
-    data["link"] = social_profile.blurblog_url
-    data["description"] = "Stories shared by %s on NewsBlur." % user.username
+    data["title"] = sanitize_for_xml(social_profile.title)
+    data["link"] = sanitize_for_xml(social_profile.blurblog_url)
+    data["description"] = sanitize_for_xml("Stories shared by %s on NewsBlur." % user.username)
     data["lastBuildDate"] = datetime.datetime.utcnow()
     data["generator"] = "NewsBlur - %s" % settings.NEWSBLUR_URL
     data["docs"] = None
-    data["author_name"] = user.username
+    data["author_name"] = sanitize_for_xml(user.username)
     data["feed_url"] = "http://%s%s" % (
         current_site,
         reverse("shared-stories-rss-feed", kwargs=params),
@@ -1645,13 +1787,14 @@ def shared_stories_rss_feed(request, user_id, username=None):
                 "content": shared_story.story_content_str,
             },
         )
+        # Sanitize all text fields to remove invalid XML control characters
         story_data = {
-            "title": shared_story.story_title,
-            "link": shared_story.story_permalink,
-            "description": content,
-            "author_name": shared_story.story_author_name,
-            "categories": shared_story.story_tags,
-            "unique_id": shared_story.story_permalink,
+            "title": sanitize_for_xml(shared_story.story_title),
+            "link": sanitize_for_xml(shared_story.story_permalink),
+            "description": sanitize_for_xml(content),
+            "author_name": sanitize_for_xml(shared_story.story_author_name),
+            "categories": [sanitize_for_xml(tag) for tag in (shared_story.story_tags or [])],
+            "unique_id": sanitize_for_xml(shared_story.story_permalink),
             "pubdate": shared_story.shared_date,
         }
         rss.add_item(**story_data)

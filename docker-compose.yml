@@ -1,5 +1,4 @@
 services:
-
   newsblur_web:
     hostname: nb.com
     container_name: newsblur_web
@@ -9,10 +8,10 @@ services:
     #   dockerfile: docker/newsblur_base_image.Dockerfile
     restart: unless-stopped
     depends_on:
-      - db_mongo
-      - db_postgres
-      - db_redis
-      - db_elasticsearch
+      - newsblur_db_mongo
+      - newsblur_db_postgres
+      - newsblur_db_redis
+      - newsblur_db_elasticsearch
     ulimits:
       nproc: 10000
       nofile:
@@ -26,10 +25,10 @@ services:
     image: ghcr.io/duxet/newsblur_node:latest
     restart: unless-stopped
     stop_signal: HUP
-    depends_on: 
-      - db_mongo
-      - db_postgres
-      - db_redis
+    depends_on:
+      - newsblur_db_mongo
+      - newsblur_db_postgres
+      - newsblur_db_redis
     ports:
       - 8008:8008
   
@@ -50,8 +49,8 @@ services:
     volumes:
       - /tmp:/tmp/imageproxy
 
-  db_postgres:
-    container_name: db_postgres
+  newsblur_db_postgres:
+    container_name: newsblur_db_postgres
     image: postgres:13.1
     restart: unless-stopped
     environment:
@@ -67,8 +66,8 @@ services:
     volumes:
       - ./docker/volumes/postgres:/var/lib/postgresql/data
 
-  db_redis:
-    container_name: db_redis
+  newsblur_db_redis:
+    container_name: newsblur_db_redis
     image: redis:latest
     ports:
       - 6579:6579
@@ -79,13 +78,33 @@ services:
       - ./docker/volumes/redis:/data
     command: redis-server /etc/redis/redis.conf --port 6579
 
-  db_elasticsearch:
-    container_name: db_elasticsearch
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.16.3
-    mem_limit: 512mb
+  # Prod Redis
+  # db_redis:
+  #   container_name: db_redis
+  #   image: redis:latest
+  #   ports:
+  #     - 6579:6579
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./docker/redis/redis.conf:/etc/redis/redis.conf
+  #     - ./docker/redis/redis_server.conf:/usr/local/etc/redis/redis_replica.conf
+  #     - ./docker/volumes/redis_prod:/data
+  #   command: redis-server /etc/redis/redis.conf --port 6579
+
+  newsblur_db_elasticsearch:
+    container_name: newsblur_db_elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    mem_limit: 1200m
+    mem_reservation: 512m
     restart: unless-stopped
     environment:
       - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms384m -Xmx384m -XX:UseSVE=0"
+      - "CLI_JAVA_OPTS=-XX:UseSVE=0"
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - xpack.security.enabled=false
+      - bootstrap.memory_lock=false
+      - indices.breaker.total.use_real_memory=false
     ports:
       - 9200:9200
       - 9300:9300
@@ -96,10 +115,9 @@ services:
   db_mongo:
     container_name: db_mongo
     image: mongo:4.0
-    user: mongodb
     restart: unless-stopped
     ports:
       - 29019:29019
-    command: mongod --port 29019
+    command: mongod --port 29019 --nojournal --wiredTigerEngineConfigString="checkpoint=(wait=0),file_manager=(close_idle_time=0),verbose=(recovery_progress)"
     volumes:
       - ./docker/volumes/db_mongo:/data/db
